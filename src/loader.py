@@ -1,8 +1,5 @@
 import pandas as pd
-
-
 from src.session import find_files, get_t0
-
 
 def load(name: str):
     """
@@ -21,4 +18,3 @@ def load(name: str):
     data.insert(0, "t_s", t_s)
     
     return data
-
