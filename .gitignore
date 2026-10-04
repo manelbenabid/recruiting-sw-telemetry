@@ -1,0 +1,11 @@
+# ignore the raw and processed data but keep the directory
+data/raw/*
+!data/raw/.gitkeep
+
+data/processed/*
+!data/processed/.gitkeep
+
+# same for figures 
+output/figures/*
+!output/figures/.gitkeep
+
