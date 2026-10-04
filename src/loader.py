@@ -53,7 +53,3 @@ def load_centerline(name: str = "centerline.json"):
     
     return df
     
-    
-    
-print(load_centerline("centerline.json"))
-print(load_centerline("centerline.json").attrs["length"])
