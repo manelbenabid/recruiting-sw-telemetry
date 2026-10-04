@@ -38,5 +38,9 @@ def compute_t0():
         t = file_data["_timestamp"].min()
         if t0 is None or t < t0:
             t0 = t
+    if t0 is None:
+        raise ValueError("No timestamp found in any of the csv files.")
     return int(t0)
+
+
 
