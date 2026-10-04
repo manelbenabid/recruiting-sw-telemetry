@@ -5,7 +5,13 @@ from src.session import find_files, get_t0
 
 
 def load(name: str):
-
+    """
+    Load data from a file by name.
+    input: the short name of the file.
+    output: dataframe with t_s (seconds since t0)
+    
+    """
+    
     files = find_files()
     if name not in files:
         raise ValueError(f"File {name} not found in {sorted(files)}.")
