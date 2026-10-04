@@ -44,7 +44,7 @@ def compute_t0():
     return int(t0)
 
 
-
+# main function in this file that will be used by other files to get the value of t0
 def get_t0():
     """
     Get the earliest timestamp across all csv files in the raw data directory.
