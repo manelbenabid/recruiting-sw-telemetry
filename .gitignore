@@ -13,3 +13,10 @@ output/figures/*
 output/logs/profile.csv
 
 .venv/
+
+# ignore the metadata tracking
+*.egg-info/
+
+__pycache__/
+.ipynb_checkpoints/
+.vscode/
