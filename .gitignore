@@ -9,3 +9,5 @@ data/processed/*
 output/figures/*
 !output/figures/.gitkeep
 
+# ignore the profiler generated file
+output/logs/profile.csv
