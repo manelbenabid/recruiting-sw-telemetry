@@ -2,3 +2,4 @@ raw_data: data/raw
 cache_file: data/processed/session_cache.json
 out_fig: output/figures
 out_logs: output/logs
+gap_factor: 3 # should be > 1

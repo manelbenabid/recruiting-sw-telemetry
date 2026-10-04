@@ -10,7 +10,7 @@ output/figures/*
 !output/figures/.gitkeep
 
 # ignore the profiler generated file
-output/logs/profile.csv
+output/logs/profile_*.csv
 
 .venv/
 

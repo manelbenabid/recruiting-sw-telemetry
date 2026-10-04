@@ -3,7 +3,7 @@ Project configuration file. This file contains the paths to the raw data, cache 
 The paths are defined in a YAML file located at the root of the project. 
 
 The config.py file reads the YAML file and defines the paths as constants that can be used throughout the project.
-
+it also exposes settings such as the grap factor
 """
 
 import yaml
@@ -27,3 +27,9 @@ if not RAW_DATA.exists(): raise FileNotFoundError(f"Raw data path {RAW_DATA} doe
 CACHE_FILE = ROOT / config["cache_file"]
 OUT_FIG = ROOT / config["out_fig"]
 OUT_LOGS = ROOT / config["out_logs"]
+
+# expose the gap factor from the config file
+GAP_FACTOR = config["gap_factor"]
+# verify that the gap factor > 1
+if not isinstance(GAP_FACTOR, (int, float)) or GAP_FACTOR <= 1:
+    raise ValueError(f"Gap factor must be a number greater than 1, but got {GAP_FACTOR}. Please check the config.yaml file.")
