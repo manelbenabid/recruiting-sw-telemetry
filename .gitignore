@@ -11,3 +11,5 @@ output/figures/*
 
 # ignore the profiler generated file
 output/logs/profile.csv
+
+.venv/
