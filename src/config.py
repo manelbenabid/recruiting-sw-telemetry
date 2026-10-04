@@ -1,3 +1,11 @@
+"""
+Project configuration file. This file contains the paths to the raw data, cache file, output figures, and output logs.
+The paths are defined in a YAML file located at the root of the project. 
+
+The config.py file reads the YAML file and defines the paths as constants that can be used throughout the project.
+
+"""
+
 import yaml
 from pathlib import Path
 
