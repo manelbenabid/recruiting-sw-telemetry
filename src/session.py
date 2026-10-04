@@ -1,6 +1,7 @@
 from src.config import RAW_DATA
+from src.config import CACHE_FILE
 import pandas as pd
-
+import json
 
 # search recursively for files and return the short name to path mapping
 def find_files(root_path=RAW_DATA, delimiter="."):
@@ -43,4 +44,17 @@ def compute_t0():
     return int(t0)
 
 
+
+def get_t0():
+    
+    if CACHE_FILE.exists():
+        with open(CACHE_FILE, "r") as f:
+            t0 = json.load(f)["t0_us"]
+        return t0
+    else:
+        t0 = compute_t0()
+        CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(CACHE_FILE, "w") as f:
+            json.dump({"t0_us": t0}, f)
+        return t0
 
