@@ -1,0 +1,4 @@
+raw_data: data/raw
+cache_file: data/processed/session_cache.json
+out_fig: output/figures
+out_logs: output/logs
