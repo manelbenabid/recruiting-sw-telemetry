@@ -46,7 +46,10 @@ def compute_t0():
 
 
 def get_t0():
-    
+    """
+    Get the earliest timestamp across all csv files in the raw data directory.
+    if the file exists then it reads from it otherwise it computes t0 (in us: microseconds) and stores it in cache.
+    """
     if CACHE_FILE.exists():
         with open(CACHE_FILE, "r") as f:
             t0 = json.load(f)["t0_us"]
