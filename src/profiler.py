@@ -4,10 +4,14 @@ to flag any missing data, duplicates, invalid data, gaps in recordings, etc.
 
 two files are generated in the log directory, one row per file and one row per signal column
 """
-from src.config import GAP_FACTOR
+from src.config import GAP_FACTOR, OUT_LOGS
 import pandas as pd
+from src.session import find_files
+from src.loader import load
 
-def profile_file(df: pd.DataFrame, gap_factor = GAP_FACTOR):
+
+
+def profile_file(df: pd.DataFrame, file_name: str, gap_factor = GAP_FACTOR):
     """
     profile the timing of one loaded data file.
     
@@ -45,6 +49,7 @@ def profile_file(df: pd.DataFrame, gap_factor = GAP_FACTOR):
     gap_time_s = (gaps - T).sum() # sum of gaps in the sample
     
     return {
+        "file": file_name,
         "start_s": start_s,
         "end_s": end_s,
         "duration_s": duration_s,
@@ -56,8 +61,77 @@ def profile_file(df: pd.DataFrame, gap_factor = GAP_FACTOR):
         "max_gap_s": max_gap_s,
         "gap_time_s": gap_time_s,
     }
-    
-    
 
+# investigating column stats
+def profile_columns(df: pd.DataFrame, file_name: str):
+    
+    """
+    profile the values of each signal column in a file.
+    
+    param: df from loader.load() and the short_name
+    
+    output: 
+    list of dicts, one per signal column.
+    with the number of missing values, min, max, number of unique values,
+    and the longest run of identical consecutive values: its length in
+    samples, its duration (s) and its start time (s).
+    
+    """
     
     
+    rows = []
+    for col in df.columns:
+        if col in ("t_s", "_timestamp"):
+            continue
+        
+        s = df[col]
+        # each change of value starts a new run; cumsum gives every run its own id
+        run_id = s.ne(s.shift()).cumsum()
+        run_sizes = s.groupby(run_id).size()
+        longest_id = run_sizes.idxmax()
+        run_t = df.loc[run_id == longest_id, "t_s"]
+
+        rows.append({
+            "file": file_name,
+            "column": col,
+            "n_nan": s.isna().sum(),
+            "min": s.min(),
+            "max": s.max(),
+            "n_unique": s.nunique(),
+            "longest_run": run_sizes.max(),
+            "longest_run_s": run_t.max() - run_t.min(),
+            "longest_run_start_s": run_t.min(),
+        })
+
+    return rows
+
+
+## the final boss
+def run_profile():
+    
+    """
+    run the profile_file and profile_columns analysis on all files and save them into the logs.
+    
+    """
+    
+    
+    file_rows = []
+    column_rows = []
+    files = find_files()
+    for file in files.keys():
+        df = load(file)
+        file_rows.append(profile_file(df, file_name = file))
+        column_rows.extend(profile_columns(df, file))
+        
+    
+    file_rows_df = pd.DataFrame(file_rows)
+    column_rows_df = pd.DataFrame(column_rows)
+    
+    OUT_LOGS.mkdir(parents=True, exist_ok=True)
+    
+    #write to output files
+    file_rows_df.to_csv(OUT_LOGS / 'profile_files.csv', index=False)
+    column_rows_df.to_csv(OUT_LOGS / 'profile_columns.csv', index=False)
+    
+    
+    return file_rows_df,column_rows_df
