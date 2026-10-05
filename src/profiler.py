@@ -9,7 +9,32 @@ import pandas as pd
 from src.session import find_files
 from src.loader import load
 
-
+# finding gaps
+def find_gaps(df: pd.DataFrame, gap_factor = GAP_FACTOR):
+    # ensure the gap factor is greater than 1
+    if not isinstance(gap_factor, (int, float)) or gap_factor <= 1:
+        raise ValueError("gap_factor must be a number greater than 1")    
+    
+    # steps
+    dt = df['t_s'].diff().dropna()
+    T  = dt[dt>0].median() # median time between samples
+    # gaps, i.e. the steps where dt >= gap_factor * T
+    gaps = dt[dt >= gap_factor * T]
+    duration_s = gaps
+    end_s = df.loc[gaps.index, "t_s"]
+    start_s = end_s - gaps
+    lost_s = gaps - T
+     
+    data = pd.DataFrame(
+        {
+            'start_s': start_s,
+            'end_s': end_s,
+            'duration_s': duration_s,
+            'lost_s': lost_s
+        }
+    ).reset_index(drop=True)
+    
+    return data
 
 def profile_file(df: pd.DataFrame, file_name: str, gap_factor = GAP_FACTOR):
     """
@@ -43,10 +68,10 @@ def profile_file(df: pd.DataFrame, file_name: str, gap_factor = GAP_FACTOR):
     T  = dt[dt>0].median() # median time between samples
     rate_hz = 1/T if T>0 else float('nan')
     # gaps, i.e. the steps where dt >= gap_factor * T
-    gaps = dt[dt >= gap_factor * T]
+    gaps = find_gaps(df, gap_factor)
     max_gap_s = dt.max()
     n_gaps = len(gaps)
-    gap_time_s = (gaps - T).sum() # sum of gaps in the sample
+    gap_time_s = gaps["lost_s"].sum() # sum of gaps in the sample
     
     return {
         "file": file_name,
@@ -135,3 +160,8 @@ def run_profile():
     
     
     return file_rows_df,column_rows_df
+
+
+
+
+
