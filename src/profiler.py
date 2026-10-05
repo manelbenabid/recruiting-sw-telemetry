@@ -51,8 +51,8 @@ def profile_file(df: pd.DataFrame, file_name: str, gap_factor = GAP_FACTOR):
     
     
     # ensure the gap factor is greater than 1
-    if not isinstance(gap_factor, (int, float)) or gap_factor <= 1:
-        raise ValueError("gap_factor must be a number greater than 1")    
+    #if not isinstance(gap_factor, (int, float)) or gap_factor <= 1:
+    #    raise ValueError("gap_factor must be a number greater than 1")    
     start_s = df['t_s'].min()
     end_s = df['t_s'].max()
     duration_s = end_s - start_s
