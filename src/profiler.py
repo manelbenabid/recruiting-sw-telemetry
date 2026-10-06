@@ -9,6 +9,19 @@ import pandas as pd
 from src.session import find_files
 from src.loader import load
 
+SENSORS = {
+    "imu_angular_rate": ["x", "y", "z"],
+    "imu_acceleration": ["x", "y", "z"],
+    "front_angular_velocity": ["fl", "fr"],
+    "inv_l_id_a8_n_actual_filt": ["n_act_filt"],
+    "inv_r_id_a8_n_actual_filt": ["n_act_filt"],
+    "inv_l_id_27_iq_actual": ["iq_act_filt"],
+    "inv_r_id_27_iq_actual": ["iq_act_filt"],
+    "pedal_throttle": ["throttle"],
+    "pedal_brakes_pressure": ["front", "rear"],
+    "hv_power": ["power"],
+}
+
 # finding gaps
 def find_gaps(df: pd.DataFrame, gap_factor = GAP_FACTOR):
     """
@@ -276,3 +289,32 @@ def find_standstills(threshold=MOTION_THRESHOLD_RAD_S, min_s=STANDSTILL_MIN_S):
     runs = runs[runs["stopped"] & (runs["duration_s"] >= min_s)]
 
     return runs[["start_s", "end_s", "duration_s"]].reset_index(drop=True)
+
+
+# this is the function that will give me
+# window | file | column | mean | std | n 
+# where mean is the mean of the column in that window
+# the std is the standard deviation of that column in that window
+# and n is the sample count in that window
+
+def standstill_stats(windows=None, sensors=SENSORS):
+    if windows is None:
+        windows = find_standstills()
+
+    rows = []
+    for name, columns in sensors.items():
+        df = load(name) 
+        for w, win in windows.iterrows():
+            in_win = df[(df["t_s"] >= win["start_s"]) & (df["t_s"] <= win["end_s"])]
+            for col in columns:
+                rows.append({
+                    "window": w,
+                    "start_s": win["start_s"],
+                    "file": name,
+                    "column": col,
+                    "mean": in_win[col].mean(),
+                    "std": in_win[col].std(),
+                    "n": in_win[col].count(),
+                })
+
+    return pd.DataFrame(rows)
