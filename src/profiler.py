@@ -184,8 +184,64 @@ def run_profile():
 
 
 
-# 
+# finding common gaps between multiple files
 
 
+## find T 
+def median_step(df: pd.DataFrame):
+    """
+    output:
+    T, the median time between consecutive samples of a loaded file (s).
+    """
+    dt = df["t_s"].diff().dropna()
+    return dt[dt > 0].median()
 
 
+# find the gaps
+def find_common_gaps(gap_factor=GAP_FACTOR):
+    """
+    Find the gaps shared by all raw data files.
+
+    only gaps long enough to be detectable in every file are compared
+    cutoff = gap_factor x the largest median step among the files, since the
+    slowest file cannot register shorter gaps. 
+    the slowest file is used as the reference. 
+    a reference gap is common if every file has a gap overlapping it
+    its interval is the union of all overlapping gaps.
+
+    output
+    dataFrame with one row per common gap: start_s, end_s, duration_s.
+    Empty if there are none.
+    """
+    files = find_files()
+
+    steps = {}
+    all_gaps = []
+    for name in files:
+        df = load(name)
+        steps[name] = median_step(df)
+        g = find_gaps(df, gap_factor)
+        g["file"] = name
+        all_gaps.append(g)
+    all_gaps = pd.concat(all_gaps, ignore_index=True)
+
+    # keep only gaps every file could detect
+    cutoff = gap_factor * max(steps.values())
+    all_gaps = all_gaps[all_gaps["duration_s"] >= cutoff]
+
+    # the slowest file is the reference
+    ref = max(steps, key=steps.get)
+
+    rows = []
+    for _, r in all_gaps[all_gaps["file"] == ref].iterrows():
+        # every kept gap overlapping this reference gap
+        overlap = all_gaps[
+            (all_gaps["start_s"] < r["end_s"]) & (r["start_s"] < all_gaps["end_s"])
+        ]
+        # common only if every file has an overlapping gap
+        if set(overlap["file"]) == set(files):
+            start = overlap["start_s"].min()
+            end = overlap["end_s"].max()
+            rows.append({"start_s": start, "end_s": end, "duration_s": end - start})
+
+    return pd.DataFrame(rows, columns=["start_s", "end_s", "duration_s"])
