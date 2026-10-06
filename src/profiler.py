@@ -229,7 +229,7 @@ def find_common_gaps(gap_factor=GAP_FACTOR):
     cutoff = gap_factor * max(steps.values())
     all_gaps = all_gaps[all_gaps["duration_s"] >= cutoff]
 
-    # the slowest file is the reference
+    # name of the file with the largest T
     ref = max(steps, key=steps.get)
 
     rows = []
