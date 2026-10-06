@@ -11,6 +11,27 @@ from src.loader import load
 
 # finding gaps
 def find_gaps(df: pd.DataFrame, gap_factor = GAP_FACTOR):
+    """
+    find the gaps in one loaded data file.
+     A gap is a step between consecutive samples of at least gap_factor *
+    the file's median step T. Steps are taken on 't_s'.
+    
+    input: 
+    df : DataFrame returned by loader.load() with a 't_s' column.
+    gap_factor : threshold multiple of T. Defaults to the value in config.yaml.
+
+    output:
+    dataFrame with one row per gap:
+        start_s    : time of the last sample before the gap (s)
+        end_s      : time of the first sample after the gap (s)
+        duration_s : end_s - start_s (s)
+        lost_s     : duration_s - T, the time actually missing (s)
+    Empty if the file has no gaps.
+
+    raises ValueError if gap_factor is not a number greater than 1.
+    
+    """
+    
     # ensure the gap factor is greater than 1
     if not isinstance(gap_factor, (int, float)) or gap_factor <= 1:
         raise ValueError("gap_factor must be a number greater than 1")    
@@ -161,6 +182,9 @@ def run_profile():
     
     return file_rows_df,column_rows_df
 
+
+
+# 
 
 
 
