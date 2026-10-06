@@ -1,1 +1,10 @@
 file,column,issue,evidence,t_start,t_end,fix,status
+all,all,logger-wide interruption,present in all 15 files-confimed by the team to be telemtry fault,596.269451,597.632128,mask in all signals-no interpolation,open
+all,all,logger-wide interruption,present in all 15 files-confimed by the team to be telemtry fault,689.644085,691.715743,mask in all signals-no interpolation,open
+all,all,logger-wide interruption,present in all 15 files-confimed by the team to be telemtry fault,754.637132,756.864146,mask in all signals-no interpolation,open
+all,all,logger-wide interruption,present in all 15 files-confimed by the team to be telemtry fault,809.634067,810.960166,mask in all signals-no interpolation,open
+all,all,logger-wide interruption,present in all 15 files-confimed by the team to be telemtry fault,814.583936,815.204798,mask in all signals-no interpolation,open
+all,all,logger-wide interruption,present in all 15 files-confimed by the team to be telemtry fault,1149.882547,1150.504297,mask in all signals-no interpolation,open
+all,all,logger-wide interruption,present in all 15 files-confimed by the team to be telemtry fault,1306.130279,1306.916267,mask in all signals-no interpolation,open
+all,all,logger-wide interruption,present in all 15 files-confimed by the team to be telemtry fault,1621.313145,1627.651344,mask in all signals-no interpolation,open
+all,all,logger-wide interruption,present in all 15 files-confimed by the team to be telemtry fault,1926.360470,1927.032350,mask in all signals-no interpolation,open
