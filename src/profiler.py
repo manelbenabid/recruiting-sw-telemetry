@@ -150,7 +150,7 @@ def profile_columns(df: pd.DataFrame, file_name: str):
         })
 
     return rows
-
+    
 
 ## the final boss
 def run_profile():
@@ -245,3 +245,34 @@ def find_common_gaps(gap_factor=GAP_FACTOR):
             rows.append({"start_s": start, "end_s": end, "duration_s": end - start})
 
     return pd.DataFrame(rows, columns=["start_s", "end_s", "duration_s"])
+
+
+
+from src.config import MOTION_THRESHOLD_RAD_S, STANDSTILL_MIN_S
+
+def find_standstills(threshold=MOTION_THRESHOLD_RAD_S, min_s=STANDSTILL_MIN_S):
+    """
+    find the periods where the car is at standstill
+
+    the car is stopped when both front wheel speeds are below threshold (rad/s)
+    and a standstill is a stopped period lasting at least min_s seconds
+    both default to the values in config.yaml
+
+    output
+    a dataFrame with one row per standstill: start_s, end_s, duration_s.
+    """
+    df = load("front_angular_velocity")
+
+    # both front wheels are below the threshold
+    stopped = (df["fl"].abs() < threshold) & (df["fr"].abs() < threshold)
+
+    run_id = stopped.ne(stopped.shift()).cumsum()
+
+    runs = df.groupby(run_id).agg(start_s=("t_s", "min"), end_s=("t_s", "max"))
+    runs["stopped"] = stopped.groupby(run_id).first()
+    runs["duration_s"] = runs["end_s"] - runs["start_s"]
+
+    # keep stopped runs that last long enough
+    runs = runs[runs["stopped"] & (runs["duration_s"] >= min_s)]
+
+    return runs[["start_s", "end_s", "duration_s"]].reset_index(drop=True)
