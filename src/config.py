@@ -33,3 +33,8 @@ GAP_FACTOR = config["gap_factor"]
 # verify that the gap factor > 1
 if not isinstance(GAP_FACTOR, (int, float)) or GAP_FACTOR <= 1:
     raise ValueError(f"Gap factor must be a number greater than 1, but got {GAP_FACTOR}. Please check the config.yaml file.")
+
+# for standstill detection
+MOTION_THRESHOLD_RAD_S = config["motion_threshold_rad_s"]
+STANDSTILL_MIN_S = config["standstill_min_s"]
+
