@@ -5,6 +5,19 @@ from src.loader import load
 
 from src.config import MOTION_THRESHOLD_RAD_S, STANDSTILL_MIN_S
 
+SENSORS = {
+    "imu_angular_rate": ["x", "y", "z"],
+    "imu_acceleration": ["x", "y", "z"],
+    "front_angular_velocity": ["fl", "fr"],
+    "inv_l_id_a8_n_actual_filt": ["n_act_filt"],
+    "inv_r_id_a8_n_actual_filt": ["n_act_filt"],
+    "inv_l_id_27_iq_actual": ["iq_act_filt"],
+    "inv_r_id_27_iq_actual": ["iq_act_filt"],
+    "pedal_throttle": ["throttle"],
+    "pedal_brakes_pressure": ["front", "rear"],
+    "hv_power": ["power"],
+}
+
 def find_standstills(threshold=MOTION_THRESHOLD_RAD_S, min_s=STANDSTILL_MIN_S):
     """
     find the periods where the car is at standstill

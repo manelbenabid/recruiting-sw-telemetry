@@ -9,18 +9,7 @@ import pandas as pd
 from src.session import find_files
 from src.loader import load
 
-SENSORS = {
-    "imu_angular_rate": ["x", "y", "z"],
-    "imu_acceleration": ["x", "y", "z"],
-    "front_angular_velocity": ["fl", "fr"],
-    "inv_l_id_a8_n_actual_filt": ["n_act_filt"],
-    "inv_r_id_a8_n_actual_filt": ["n_act_filt"],
-    "inv_l_id_27_iq_actual": ["iq_act_filt"],
-    "inv_r_id_27_iq_actual": ["iq_act_filt"],
-    "pedal_throttle": ["throttle"],
-    "pedal_brakes_pressure": ["front", "rear"],
-    "hv_power": ["power"],
-}
+
 
 # finding gaps
 def find_gaps(df: pd.DataFrame, gap_factor = GAP_FACTOR):
