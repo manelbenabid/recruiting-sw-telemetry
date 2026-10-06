@@ -298,6 +298,22 @@ def find_standstills(threshold=MOTION_THRESHOLD_RAD_S, min_s=STANDSTILL_MIN_S):
 # and n is the sample count in that window
 
 def standstill_stats(windows=None, sensors=SENSORS):
+    """
+    compute the offset and noise of each sensor during each standstill window.
+
+    params
+    windows : you can overrite these otherise use find_standstills()
+    sensors : dict mapping a file's short name to the columns to measure
+
+    output
+    dataFrame with one row per (window, file, column):
+        window: window id (row number in windows)
+        start_s: window start time (s)
+        file, column
+        mean: mean value in the window (the offset)
+        std: standard deviation in the window (the noise)
+        n: number of samples in the window
+    """
     if windows is None:
         windows = find_standstills()
 
