@@ -8,3 +8,7 @@ all,all,logger-wide interruption,present in all 15 files-confimed by the team to
 all,all,logger-wide interruption,present in all 15 files-confimed by the team to be telemtry fault,1306.130279,1306.916267,mask in all signals-no interpolation,open
 all,all,logger-wide interruption,present in all 15 files-confimed by the team to be telemtry fault,1621.313145,1627.651344,mask in all signals-no interpolation,open
 all,all,logger-wide interruption,present in all 15 files-confimed by the team to be telemtry fault,1926.360470,1927.032350,mask in all signals-no interpolation,open
+imu_acceleration,x,constant offset (mounting angle or sensor bias),"mean -0.06 to -0.09 g at rest in all 9 standstill windows at different locations; ~6% of peak braking (1.2 g)",,,subtract average of standstill window means (~-0.07 g),open
+imu_angular_rate,x,offset with slow drift (likely temperature),"mean at rest 1.16 to 0.95 deg/s across standstill windows",,,subtract average of standstill window means (~1.0 deg/s),open
+imu_angular_rate,y,offset with slow drift (likely temperature),"mean at rest -0.25 to -0.31 deg/s across standstill windows",,,subtract average of standstill window means (~-0.28 deg/s),open
+imu_angular_rate,z,offset with slow drift (likely temperature),"mean at rest 1.02 to 0.98 deg/s across standstill windows; residual drift <0.03 deg/s vs ~100 deg/s peaks",,,subtract average of standstill window means (~1.0 deg/s),open
