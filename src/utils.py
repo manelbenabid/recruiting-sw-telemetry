@@ -89,3 +89,75 @@ def standstill_stats(windows=None, sensors=SENSORS):
                 })
 
     return pd.DataFrame(rows)
+
+from src.config import WHEEL_RADIUS, PIT_MIN_S
+from src.profiler import find_common_gaps
+from src.loader import load_centerline
+
+# define the boundaries of a lap s 0->805
+def find_laps():
+    df = load("vehicle_curvilinear_coordinates")
+    standstills = find_standstills()
+    common_gaps = find_common_gaps()
+    
+    pits = standstills[standstills["duration_s"] >= PIT_MIN_S]
+
+    
+    ds = df["s"].diff()
+    track_length = load_centerline().attrs["length"]
+    cand = df[ds < -track_length / 2]
+    
+    # rule1: wheels are moving
+    wheel_speed = load("front_angular_velocity")
+    survivors = pd.merge_asof(cand, wheel_speed, direction="nearest", on="t_s")
+    survivors = survivors[(survivors["fl"].abs() >= MOTION_THRESHOLD_RAD_S) | (survivors["fr"].abs() >= MOTION_THRESHOLD_RAD_S)]
+    
+    # rule2: minimum lap time = track length / session's top speed
+    speed = ((wheel_speed["fr"] + wheel_speed["fl"]) /2) * WHEEL_RADIUS
+    top_speed = speed.max()
+    min_lap_s = track_length / top_speed
+    
+    survivors = survivors.sort_values("t_s")
+
+    accepted = []
+    last_t = None  # time of the last accepted boundary
+    for t in survivors["t_s"]:
+        if last_t is None or t - last_t >= min_lap_s:
+            accepted.append(t)
+            last_t = t
+
+    boundaries = pd.Series(accepted, name="t_s") # rach paid boundaries[i] and boundaries[i+1] is one lap
+    
+    rows = []
+    prev_has_pit = False  # the first lap has no previous lap
+
+    for i in range(len(boundaries) -1):
+        lap_start = boundaries[i]
+        lap_end = boundaries[i+1]
+        has_stop = ((standstills["start_s"] < lap_end) & (lap_start < standstills["end_s"])).any()
+        has_gap  = ((common_gaps["start_s"] < lap_end) & (lap_start < common_gaps["end_s"])).any()
+        has_pit = ((pits["start_s"] < lap_end) & (lap_start < pits["end_s"])).any()
+        is_out_lap = prev_has_pit
+        
+        valid = not (has_stop or has_gap or is_out_lap)
+        rows.append({
+            "lap_number": i+1,
+            "start_s": lap_start,
+            "end_s": lap_end,
+            "lap_time_s": lap_end - lap_start,
+            "has_stop": has_stop,
+            "has_gap": has_gap,
+            "has_pit": has_pit,
+            "is_out_lap": is_out_lap,
+            "valid": valid
+        })
+        
+        prev_has_pit = has_pit
+        
+
+    laps = pd.DataFrame(rows)
+    
+    return laps
+    
+        
+    
