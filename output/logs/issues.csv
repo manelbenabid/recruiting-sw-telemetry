@@ -1,20 +1,20 @@
 file,column,issue,evidence,t_start,t_end,fix,status
-all,all,logger-wide interruption,present in all 15 files-confimed by the team to be telemtry fault,596.269451,597.632128,mask in all signals-no interpolation,open
-all,all,logger-wide interruption,present in all 15 files-confimed by the team to be telemtry fault,689.644085,691.715743,mask in all signals-no interpolation,open
-all,all,logger-wide interruption,present in all 15 files-confimed by the team to be telemtry fault,754.637132,756.864146,mask in all signals-no interpolation,open
-all,all,logger-wide interruption,present in all 15 files-confimed by the team to be telemtry fault,809.634067,810.960166,mask in all signals-no interpolation,open
-all,all,logger-wide interruption,present in all 15 files-confimed by the team to be telemtry fault,814.583936,815.204798,mask in all signals-no interpolation,open
-all,all,logger-wide interruption,present in all 15 files-confimed by the team to be telemtry fault,1149.882547,1150.504297,mask in all signals-no interpolation,open
-all,all,logger-wide interruption,present in all 15 files-confimed by the team to be telemtry fault,1306.130279,1306.916267,mask in all signals-no interpolation,open
-all,all,logger-wide interruption,present in all 15 files-confimed by the team to be telemtry fault,1621.313145,1627.651344,mask in all signals-no interpolation,open
-all,all,logger-wide interruption,present in all 15 files-confimed by the team to be telemtry fault,1926.360470,1927.032350,mask in all signals-no interpolation,open
-imu_acceleration,x,constant offset (mounting angle or sensor bias),"mean -0.06 to -0.09 g at rest in all 9 standstill windows at different locations; ~6% of peak braking (1.2 g)",,,subtract average of standstill window means (~-0.07 g),open
-imu_angular_rate,x,offset with slow drift (likely temperature),"mean at rest 1.16 to 0.95 deg/s across standstill windows",,,subtract average of standstill window means (~1.0 deg/s),open
-imu_angular_rate,y,offset with slow drift (likely temperature),"mean at rest -0.25 to -0.31 deg/s across standstill windows",,,subtract average of standstill window means (~-0.28 deg/s),open
-imu_angular_rate,z,offset with slow drift (likely temperature),"mean at rest 1.02 to 0.98 deg/s across standstill windows; residual drift <0.03 deg/s vs ~100 deg/s peaks",,,subtract average of standstill window means (~1.0 deg/s),open
-pedal_throttle,throttle,sensor-specific dropouts,"956 gaps (>= 3T) beyond the common logger gaps; 46.8 s lost",,,mask gaps >= 3T; interpolate smaller drops,open
-steer_angle,angle,sensor-specific dropouts,"653 gaps (>= 3T) beyond the common logger gaps; 39.1 s lost; ~12500 samples missing in total, mostly 1-2 sample drops",,,mask gaps >= 3T; interpolate smaller drops,open
-pedal_brakes_pressure,all,sensor-specific dropouts,"487 gaps (>= 3T) beyond the common logger gaps; 35.4 s lost",,,mask gaps >= 3T; interpolate smaller drops,open
-hv_power,power,sensor-specific dropouts,"1289 gaps (>= 3T); 182.3 s lost (~8% of the session)",,,mask gaps >= 3T; interpolate smaller drops,open
-vehicle_speed; vehicle_position; vehicle_curvilinear_coordinates,all,late start,first sample at 2.19 s (grid wait),0,2.188702,start common grid at latest first sample,open
-gps_0,all,source dropped,estimator already fuses GPS,,,exclude GPS files,open
+all,all,logger-wide interruption,present in all 15 files-confimed by the team to be telemtry fault,596.269451,597.632128,mask in all signals-no interpolation,fixed
+all,all,logger-wide interruption,present in all 15 files-confimed by the team to be telemtry fault,689.644085,691.715743,mask in all signals-no interpolation,fixed
+all,all,logger-wide interruption,present in all 15 files-confimed by the team to be telemtry fault,754.637132,756.864146,mask in all signals-no interpolation,fixed
+all,all,logger-wide interruption,present in all 15 files-confimed by the team to be telemtry fault,809.634067,810.960166,mask in all signals-no interpolation,fixed
+all,all,logger-wide interruption,present in all 15 files-confimed by the team to be telemtry fault,814.583936,815.204798,mask in all signals-no interpolation,fixed
+all,all,logger-wide interruption,present in all 15 files-confimed by the team to be telemtry fault,1149.882547,1150.504297,mask in all signals-no interpolation,fixed
+all,all,logger-wide interruption,present in all 15 files-confimed by the team to be telemtry fault,1306.130279,1306.916267,mask in all signals-no interpolation,fixed
+all,all,logger-wide interruption,present in all 15 files-confimed by the team to be telemtry fault,1621.313145,1627.651344,mask in all signals-no interpolation,fixed
+all,all,logger-wide interruption,present in all 15 files-confimed by the team to be telemtry fault,1926.360470,1927.032350,mask in all signals-no interpolation,fixed
+imu_acceleration,x,constant offset (mounting angle or sensor bias),"mean -0.06 to -0.09 g at rest in all 9 standstill windows at different locations; ~6% of peak braking (1.2 g)",,,subtract average of standstill window means (~-0.07 g),fixed
+imu_angular_rate,x,offset with slow drift (likely temperature),"mean at rest 1.16 to 0.95 deg/s across standstill windows",,,subtract average of standstill window means (~1.0 deg/s),fixed
+imu_angular_rate,y,offset with slow drift (likely temperature),"mean at rest -0.25 to -0.31 deg/s across standstill windows",,,subtract average of standstill window means (~-0.28 deg/s),fixed
+imu_angular_rate,z,offset with slow drift (likely temperature),"mean at rest 1.02 to 0.98 deg/s across standstill windows; residual drift <0.03 deg/s vs ~100 deg/s peaks",,,subtract average of standstill window means (~1.0 deg/s),fixed
+pedal_throttle,throttle,sensor-specific dropouts,"956 gaps (>= 3T) beyond the common logger gaps; 46.8 s lost",,,mask gaps >= 3T; interpolate smaller drops,fixed
+steer_angle,angle,sensor-specific dropouts,"653 gaps (>= 3T) beyond the common logger gaps; 39.1 s lost; ~12500 samples missing in total, mostly 1-2 sample drops",,,mask gaps >= 3T; interpolate smaller drops,fixed
+pedal_brakes_pressure,all,sensor-specific dropouts,"487 gaps (>= 3T) beyond the common logger gaps; 35.4 s lost",,,mask gaps >= 3T; interpolate smaller drops,fixed
+hv_power,power,sensor-specific dropouts,"1289 gaps (>= 3T); 182.3 s lost (~8% of the session)",,,mask gaps >= 3T; interpolate smaller drops,fixed
+vehicle_speed; vehicle_position; vehicle_curvilinear_coordinates,all,late start,first sample at 2.19 s (grid wait),0,2.188702,start common grid at latest first sample,fixed
+gps_0,all,source dropped,estimator already fuses GPS,,,exclude GPS files,fixed
