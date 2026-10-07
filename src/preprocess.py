@@ -59,6 +59,15 @@ def gap_intervals(dfs: dict) -> dict:
 
 def make_grid(dfs, rate):
     """
+    build a common, evenly spaced time grid for all signals
+    
+    input:
+        dfs: dict(str, dataframe)
+        it's the raw signal per file each with a sorted 't_s' column
+    rate in Hz
+    
+    output:
+    grid times in seconds, spaced 1 / rate apart
     
     """
     
