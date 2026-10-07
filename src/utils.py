@@ -94,8 +94,29 @@ from src.config import WHEEL_RADIUS, PIT_MIN_S
 from src.profiler import find_common_gaps
 from src.loader import load_centerline
 
-# define the boundaries of a lap s 0->805
 def find_laps():
+    
+    """
+    split the session into laps at start/finish line crossings.
+    
+    a "crossing" is where s drops by more than hald the track length 
+    while the dront wheels are moving (rule1).
+    crossings closeer than the minimum lap time (track length / session top speed)
+    to the previous accepted one are discarded as flicker (rule2)
+    
+    output:
+    a df with one row per lap:
+    lap number | start_s | end_s | lap_time_s | has_stop | has_gap | has_pit | is_out_lap | valid
+    the flags mean the following:
+    has_stop: it contains a standstill
+    has_gap: contains a common gap
+    has_pit: contains a pit stop
+    is_out_lap: boxed and is coming out of the pit
+    valid: no stop, no gap, nt an outlap
+    """
+    
+    
+    
     df = load("vehicle_curvilinear_coordinates")
     standstills = find_standstills()
     common_gaps = find_common_gaps()
@@ -129,7 +150,6 @@ def find_laps():
     boundaries = pd.Series(accepted, name="t_s") # rach paid boundaries[i] and boundaries[i+1] is one lap
     
     rows = []
-    prev_has_pit = False  # the first lap has no previous lap
 
     for i in range(len(boundaries) -1):
         lap_start = boundaries[i]
@@ -137,7 +157,7 @@ def find_laps():
         has_stop = ((standstills["start_s"] < lap_end) & (lap_start < standstills["end_s"])).any()
         has_gap  = ((common_gaps["start_s"] < lap_end) & (lap_start < common_gaps["end_s"])).any()
         has_pit = ((pits["start_s"] < lap_end) & (lap_start < pits["end_s"])).any()
-        is_out_lap = prev_has_pit
+        is_out_lap = ((pits["end_s"] >= lap_start) & (pits["end_s"] < lap_end)).any()
         
         valid = not (has_stop or has_gap or is_out_lap)
         rows.append({
@@ -152,7 +172,6 @@ def find_laps():
             "valid": valid
         })
         
-        prev_has_pit = has_pit
         
 
     laps = pd.DataFrame(rows)
