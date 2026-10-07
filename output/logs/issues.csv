@@ -12,3 +12,7 @@ imu_acceleration,x,constant offset (mounting angle or sensor bias),"mean -0.06 t
 imu_angular_rate,x,offset with slow drift (likely temperature),"mean at rest 1.16 to 0.95 deg/s across standstill windows",,,subtract average of standstill window means (~1.0 deg/s),open
 imu_angular_rate,y,offset with slow drift (likely temperature),"mean at rest -0.25 to -0.31 deg/s across standstill windows",,,subtract average of standstill window means (~-0.28 deg/s),open
 imu_angular_rate,z,offset with slow drift (likely temperature),"mean at rest 1.02 to 0.98 deg/s across standstill windows; residual drift <0.03 deg/s vs ~100 deg/s peaks",,,subtract average of standstill window means (~1.0 deg/s),open
+pedal_throttle,throttle,sensor-specific dropouts,"956 gaps (>= 3T) beyond the common logger gaps; 46.8 s lost",,,mask gaps >= 3T; interpolate smaller drops,open
+steer_angle,angle,sensor-specific dropouts,"653 gaps (>= 3T) beyond the common logger gaps; 39.1 s lost; ~12500 samples missing in total, mostly 1-2 sample drops",,,mask gaps >= 3T; interpolate smaller drops,open
+pedal_brakes_pressure,all,sensor-specific dropouts,"487 gaps (>= 3T) beyond the common logger gaps; 35.4 s lost",,,mask gaps >= 3T; interpolate smaller drops,open
+hv_power,power,sensor-specific dropouts,"1289 gaps (>= 3T); 182.3 s lost (~8% of the session)",,,mask gaps >= 3T; interpolate smaller drops,open
