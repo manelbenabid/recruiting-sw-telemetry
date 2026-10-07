@@ -5,3 +5,5 @@ out_logs: output/logs
 gap_factor: 3 # should be > 1
 motion_threshold_rad_s: 1
 standstill_min_s: 3
+wheel_radius: 0.19 # in m
+pit_min_s: 60 # a pit stop is max of 3min but also could be longer than that or lesss than that, this is an assumtpion
