@@ -16,3 +16,5 @@ pedal_throttle,throttle,sensor-specific dropouts,"956 gaps (>= 3T) beyond the co
 steer_angle,angle,sensor-specific dropouts,"653 gaps (>= 3T) beyond the common logger gaps; 39.1 s lost; ~12500 samples missing in total, mostly 1-2 sample drops",,,mask gaps >= 3T; interpolate smaller drops,open
 pedal_brakes_pressure,all,sensor-specific dropouts,"487 gaps (>= 3T) beyond the common logger gaps; 35.4 s lost",,,mask gaps >= 3T; interpolate smaller drops,open
 hv_power,power,sensor-specific dropouts,"1289 gaps (>= 3T); 182.3 s lost (~8% of the session)",,,mask gaps >= 3T; interpolate smaller drops,open
+vehicle_speed; vehicle_position; vehicle_curvilinear_coordinates,all,late start,first sample at 2.19 s (grid wait),0,2.188702,start common grid at latest first sample,open
+gps_0,all,source dropped,estimator already fuses GPS,,,exclude GPS files,open
