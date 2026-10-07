@@ -37,4 +37,5 @@ if not isinstance(GAP_FACTOR, (int, float)) or GAP_FACTOR <= 1:
 # for standstill detection
 MOTION_THRESHOLD_RAD_S = config["motion_threshold_rad_s"]
 STANDSTILL_MIN_S = config["standstill_min_s"]
-
+WHEEL_RADIUS = config["wheel_radius"]
+PIT_MIN_S =  config["pit_min_s"]
