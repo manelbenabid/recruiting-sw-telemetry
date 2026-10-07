@@ -42,4 +42,16 @@ def wrap(df: pd.DataFrame, col: str, period: float, low: float):
     
     return data
     
+
+from src.profiler import find_gaps
+ 
+def gap_intervals(dfs: dict) -> dict:
     
+    """
+    
+    takes a dict of {file: DataFrame} and returns 
+    a dict {file: DataFrame of intervals} of its gaps
+    
+    """
+    
+    return {file: find_gaps(df)[["start_s", "end_s"]] for file, df in dfs.items()}
