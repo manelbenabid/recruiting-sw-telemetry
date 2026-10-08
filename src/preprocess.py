@@ -199,12 +199,12 @@ def resample(dfs: dict, grid: np.ndarray, intervals: dict):
 
 
 from src.loader import load_centerline
-from src.config import GRID_RATE_HZ
-def run_preprocessing(files: list = FILES, rate: int = GRID_RATE_HZ):
+from src.config import GRID_RATE_HZ, PROC_DATA
+def run_preprocessing(files: list = FILES, rate: int = GRID_RATE_HZ, save: bool = True):
     """
     Run the preprocessing pipeline: load, remove IMU offsets, unwrap s and
     heading, find gaps, resample onto a common grid with gaps masked, and
-    wrap s and heading back.
+    wrap s and heading back, and save to parquet.
     
     """
     
@@ -232,7 +232,17 @@ def run_preprocessing(files: list = FILES, rate: int = GRID_RATE_HZ):
     # wrap s and heading back
     resampled = wrap(resampled,"vehicle_curvilinear_coordinates__s", L, 0)
     resampled= wrap(resampled, "vehicle_position__heading", 2*np.pi, -np.pi)
-       
+    
+    
+    # low-pass filter
+    resampled = lowpass(resampled, fs=rate)
+
+    # save
+    if save:
+        PROC_DATA.mkdir(parents=True, exist_ok=True)
+        resampled.to_parquet(PROC_DATA / "session.parquet", index=False)
+        
+    
     return resampled,  offsets
     
 
