@@ -7,29 +7,6 @@ from scipy.signal import butter, sosfiltfilt
 
 
 
-OFFSET_CHANNELS = {
-    "imu_angular_rate": ["x", "y", "z"],
-    "imu_acceleration": ["x"],
-}
-
-FILES = [
-    "hv_power",
-    "imu_angular_rate",
-    "imu_acceleration",
-    "vehicle_position",
-    "vehicle_speed",
-    "vehicle_curvilinear_coordinates",
-    "pedal_brakes_pressure",
-    "pedal_throttle",
-    "steer_angle",
-    "front_angular_velocity",
-    "inv_r_id_a8_n_actual_filt",
-    "inv_l_id_a8_n_actual_filt",
-    "inv_r_id_27_iq_actual",
-    "inv_l_id_27_iq_actual",
-]
-
-
 def remove_offsets(channels=OFFSET_CHANNELS):
     """subtract standstill offsets. 
     
