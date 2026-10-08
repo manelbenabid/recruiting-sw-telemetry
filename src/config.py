@@ -27,7 +27,7 @@ if not RAW_DATA.exists(): raise FileNotFoundError(f"Raw data path {RAW_DATA} doe
 CACHE_FILE = ROOT / config["cache_file"]
 OUT_FIG = ROOT / config["out_fig"]
 OUT_LOGS = ROOT / config["out_logs"]
-
+PROC_DATA = ROOT / config["proc_data"]
 # expose the gap factor from the config file
 GAP_FACTOR = config["gap_factor"]
 # verify that the gap factor > 1
