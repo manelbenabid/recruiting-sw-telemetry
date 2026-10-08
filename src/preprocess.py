@@ -1,5 +1,10 @@
 from src.utils import standstill_stats
-from src.loader import load
+from src.loader import load, load_centerline
+from src.config import GRID_RATE_HZ, PROC_DATA, CUTOFFS
+import pandas as pd
+import numpy as np
+from scipy.signal import butter, sosfiltfilt
+
 
 
 OFFSET_CHANNELS = {
@@ -44,8 +49,7 @@ def remove_offsets(channels=OFFSET_CHANNELS):
 
     return corrected, offsets
 
-import pandas as pd
-import numpy as np
+
 
 def unwrap(df: pd.DataFrame, col: str, period: float):
     
@@ -106,8 +110,7 @@ def make_grid(dfs, rate):
 
 
 
-from scipy.signal import butter, sosfiltfilt
-from src.config import CUTOFFS
+
 
 
 def _runs(ok: np.ndarray):
@@ -198,8 +201,7 @@ def resample(dfs: dict, grid: np.ndarray, intervals: dict):
     return pd.DataFrame(interpolated)
 
 
-from src.loader import load_centerline
-from src.config import GRID_RATE_HZ, PROC_DATA
+
 def run_preprocessing(files: list = FILES, rate: int = GRID_RATE_HZ, save: bool = True):
     """
     Run the preprocessing pipeline: load, remove IMU offsets, unwrap s and
