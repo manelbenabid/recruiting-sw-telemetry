@@ -104,6 +104,55 @@ def make_grid(dfs, rate):
     
     return grid
 
+
+
+from scipy.signal import butter, sosfiltfilt
+from src.config import CUTOFFS
+
+
+def _runs(ok: np.ndarray):
+    """
+    (start, end) index pairs of consecutive True values
+    end is exclusive
+    
+    """
+    d = np.diff(np.concatenate(([0], ok.astype(int), [0])))
+    return list(zip(np.flatnonzero(d == 1), np.flatnonzero(d == -1)))
+
+
+def lowpass(df: pd.DataFrame, cutoffs: dict = CUTOFFS, fs: float = GRID_RATE_HZ, order: int = 4):
+    """
+    Zero-phase Butterworth low-pass filter, applied per NaN-free segment.
+
+    each column whose name starts with a key of `cutoffs` is filtered at that cutoff.
+    filtering runs forward and backward (sosfiltfilt) so events are
+    not shifted in time, and separately on each continuous stretch between
+    NaN gaps so gap edges don't leak into good data. 
+    Segments too short for the filter are left unfiltered. 
+    Other columns are returned unchanged.
+
+    input:
+    df : resampled signals on a regular grid at sampling rate 'fs'
+    cutoffs : dict[str, float] column-name prefix -> cutoff frequency in Hz.
+    fs : sampling rate of the grid in Hz
+    order : Butterworth filter order.
+
+    output
+    a daatframe: copy of 'df' with the selected columns filtered.
+    """
+    out = df.copy()
+    for prefix, fc in cutoffs.items():
+        sos = butter(order, fc, btype="low", fs=fs, output="sos")
+        min_len = 3 * (2 * len(sos) + 1)  # sosfiltfilt's default padding needs at least this many samples
+        for col in [c for c in df.columns if c.startswith(prefix)]:
+            x = df[col].to_numpy()
+            y = x.copy()
+            for a, b in _runs(~np.isnan(x)):
+                if b - a > min_len:
+                    y[a:b] = sosfiltfilt(sos, x[a:b])
+            out[col] = y
+    return out
+
 def resample(dfs: dict, grid: np.ndarray, intervals: dict):
     """
     resample every signal onto a common time grid and mask gaps
@@ -148,6 +197,7 @@ def resample(dfs: dict, grid: np.ndarray, intervals: dict):
 
     return pd.DataFrame(interpolated)
 
+
 from src.loader import load_centerline
 from src.config import GRID_RATE_HZ
 def run_preprocessing(files: list = FILES, rate: int = GRID_RATE_HZ):
@@ -182,7 +232,6 @@ def run_preprocessing(files: list = FILES, rate: int = GRID_RATE_HZ):
     # wrap s and heading back
     resampled = wrap(resampled,"vehicle_curvilinear_coordinates__s", L, 0)
     resampled= wrap(resampled, "vehicle_position__heading", 2*np.pi, -np.pi)
-       
        
     return resampled,  offsets
     
