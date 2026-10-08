@@ -1,6 +1,6 @@
 from src.utils import standstill_stats
 from src.loader import load, load_centerline
-from src.config import GRID_RATE_HZ, PROC_DATA, CUTOFFS
+from src.config import GRID_RATE_HZ, PROC_DATA, CUTOFFS, OFFSET_CHANNELS, FILES
 import pandas as pd
 import numpy as np
 from scipy.signal import butter, sosfiltfilt
