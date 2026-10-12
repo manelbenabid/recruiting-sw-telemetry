@@ -3,6 +3,7 @@ from src.config import PIT_MIN_S, PROC_DATA, MOTION_THRESHOLD_RAD_S, STANDSTILL_
 import pandas as pd
 from src.preprocess import load_processed
 import numpy as np
+from src.loader import load_centerline
 
 S_COL = "vehicle_curvilinear_coordinates__s"
 
@@ -87,6 +88,102 @@ def unwrap(df: pd.DataFrame, col: str, period: float):
     
     return data
 
+def segment_laps(df: pd.DataFrame, standstills, stints, track_length):
+    df = df.copy()
+
+    t = df["t_s"].to_numpy()
+    s = df[S_COL]
+    stint = df["stint"].to_numpy()
+
+    # 1. number of times the line has been crossed
+    count = np.floor(df["s_unwrapped"].to_numpy() / track_length)
+    usable = ~np.isnan(count) & ~np.isnan(stint) # inside a stint and s not NaN
+    pos = np.flatnonzero(usable) # the positions of the usable rows
+    c, st = count[pos], stint[pos]
+
+    # 2. boundaries of the laps,
+    is_boundary = np.zeroes(len(pos), dtype=bool)
+    is_boundary[1:] = (c[1:]) & (st[1:] == st[:-1])
+    b_pos = pos[is_boundary]
+    b_stint = stint[b_pos]
+
+    # 3. laps
+    rows = []
+    for k in range(len(b_pos) -1):
+        if b_stint[k] != b_stint[k+1]:
+            continue # next boundary is in another stint
+        rows.append({
+            "stint": int(b_stint[k]),
+            "start_pos": b_pos[k],
+            "end_pos": b_pos[k+1] -1
+        })
+
+    laps = pd.DataFrame(rows, columns=["stint", "start_pos", "end_pos"])
+
+    # 4. number the laps 1..N across the session
+    laps.insert(0, "lap", np.arange(1, len(laps), +1))
+    # 5. lap times
+    laps["t_start"] = t[laps["start_pos"]]
+    laps["t_end"] = t[laps["end_pos"]]
+    laps["lap_time"] = laps["t_end"] - laps["t_start"]
+
+    # 6. flags
+    stops = standstills[standstills["type"] == "stop"]
+    laps["has_stop"] = [
+        ((stops["start_s"] <= te) & (stops["end_s"] >= ts)).any()   # overlap test
+        for ts, te in zip(laps["t_start"], laps["t_end"])
+    ]
+
+    laps["has_gap"] = [np.isnan(s[a:b + 1]).any()
+                       for a, b in zip(laps["start_pos"], laps["end_pos"])]
+
+    # line grossed inside a gap
+    laps["gap_on_boundary"] = [np.isnan(s[a - 1]) or np.isnan(s[b])
+                               for a, b in zip(laps["start_pos"], laps["end_pos"])]
 
 
+    # 7. gaps table: each NaN run in n inside a lap
+    gap_rows = []
+    for lap, a, b in zip(laps["lap"], laps["start_pos"], laps["end_pos"]):
+        nan = np.nan(s[a:b+1]).astype(int)
+        edges = np.diff(np.concatenate([[0], nan, [0]]))
+        run_starts = np.flatnonzero(edges == 1)
+        run_ends = np.flatnonzero(edges == -1) - 1
+        for rs, re, in zip(run_starts, run_ends):
+            i0, i1=a+rs, a+re
+            gap_rows.append({
+                "lap": lap,
+                "t_start": t[i0],
+                "t_end": t[i1],
+                "duration_s": t[i1] - t[i0],
+                "s_start": s[i0 - 1], # last valid s before the gap
+                "e_end": s[i1 +1] # first valid s after the gap
+            })
+
+    gaps = pd.DataFrame(gap_rows, columns = ["lap", "t_start", "t_end", "duration_s", "s_start", "s_end"])
+
+    # 8. label rows with their number 
+    lap_col = np.full(len(df), np.nan)
+    for lap, a, b in zip(laps["lap"], laps["start_pos"], laps["end_pos"]):
+        lap_col[a:b+1] = lap
+    df["lap"] = lap_col
+
+    return df, laps.drop(columns=["start_pos", "end_pos"]), gaps
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
     
