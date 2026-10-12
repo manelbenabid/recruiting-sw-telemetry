@@ -223,6 +223,16 @@ def run_preprocessing(files: list = FILES, rate: int = GRID_RATE_HZ, save: bool 
         
     
     return resampled,  offsets
+
+
+def load_processed():
+    path = PROC_DATA / "session.parquet"
+    if not path.exists():
+        df, _ = run_preprocessing()
+        return df
+    return pd.read_parquet(path)
+    
+    
     
 
     
