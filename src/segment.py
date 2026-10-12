@@ -70,7 +70,7 @@ def define_stints(df: pd.DataFrame, track_length, pit_min_s: int = PIT_MIN_S):
     # each stint runs until the next one starts, so a pit belongs to the stint before it
     stints.loc[stints.index[:-1], "end_s"] = stints["start_s"].iloc[1:].to_numpy()
 
-    
+
     # label the rows
     df = df.copy()
     df["stint"] = np.nan
@@ -140,7 +140,7 @@ def segment_laps(df: pd.DataFrame, standstills: pd.DataFrame, track_length: floa
 
     
     # 5. number the laps 1..N across the session
-    laps.insert(0, "lap", np.arange(1, len(laps), +1))
+    laps.insert(0, "lap", np.arange(1, len(laps) +1))
     # 6. lap times
     laps["t_start"] = t[laps["start_pos"]]
     laps["t_end"] = t[laps["end_pos"]]
