@@ -72,4 +72,21 @@ def define_stints(df: pd.DataFrame, track_length, mition_threashold: int = MOTIO
 
     return df, stints
 
+def unwrap(df: pd.DataFrame, col: str, period: float):
+    
+    """
+    
+    period is the full period of that column
+    for exampe distance is 0 -> 805 so period = 805
+    
+    """
+    
+    data = df.copy() 
+    s = df[col].dropna().to_numpy()
+    data["s_unwrapped"] = pd.Series(np.unwrap(s, period=period), index=s.index)
+    
+    return data
+
+
+
     
