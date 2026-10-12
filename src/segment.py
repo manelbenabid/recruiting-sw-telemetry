@@ -154,7 +154,7 @@ def segment_laps(df: pd.DataFrame, standstills: pd.DataFrame, track_length: floa
 
     laps["has_pit"] = overlaps(standstills[standstills["type"] == "pit"])
     laps["has_stop"] = overlaps(standstills[standstills["type"] == "stop"])
-    laps["has_gap"] = [np.isnan(s[a:b + 1]).any()
+    laps["has_nan"] = [np.isnan(s[a:b + 1]).any()
                        for a, b in zip(laps["start_pos"], laps["end_pos"])]
 
     
