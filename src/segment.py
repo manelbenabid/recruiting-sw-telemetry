@@ -1,5 +1,5 @@
 
-from src.config import PIT_MIN_S, PROC_DATA, MOTION_THRESHOLD_RAD_S, STANDSTILL_MIN_S
+from src.config import PIT_MIN_S, PROC_DATA, MOTION_THRESHOLD_RAD_S, STANDSTILL_MIN_S, DISTANCE_GRID_STEP_M
 import pandas as pd
 from src.preprocess import load_processed
 import numpy as np
@@ -184,6 +184,103 @@ def segment_laps(df: pd.DataFrame, standstills: pd.DataFrame, track_length: floa
 
     return df, laps.drop(columns=["start_pos", "end_pos"]), gaps
 
+
+
+# distance grid
+
+NEEDED_CHANNELS = [
+    "pedal_throttle__throttle",
+    "pedal_brakes_pressure__front",
+    "pedal_brakes_pressure__rear",
+    "vehicle_speed__u",
+    "imu_acceleration__y",
+    "imu_acceleration__x",
+    "vehicle_position__x",
+    "vehicle_position__y",
+    "vehicle_curvilinear_coordinates__n",
+    "front_angular_velocity__fl",
+    "front_angular_velocity__fr",
+    "hv_power__power",
+    "inv_l_id_a8_n_actual_filt__n_act_filt",
+    "inv_r_id_a8_n_actual_filt__n_act_filt",
+    "inv_l_id_27_iq_actual__iq_act_filt",
+    "inv_r_id_27_iq_actual__iq_act_filt"
+]
+
+def nan_runs(df: pd.DataFrame, col: str):
+    t = df["t_s"].to_numpy()
+    is_nan = df[col].isna().to_numpy().astype(int)
+
+    # +1 where a NaN run starts, -1 just after it ends
+    edges = np.diff(np.concatenate([[0], is_nan, [0]]))
+    first = np.flatnonzero(edges == 1)    
+    last = np.flatnonzero(edges == -1) - 1
+
+    before = np.clip(first - 1, 0, len(t) - 1)
+    after = np.clip(last + 1, 0, len(t) - 1)
+
+    return pd.DataFrame({
+        "t_start": t[first], # first NaN
+        "t_end": t[last], # last NaN
+        "t_before": t[before], # last known value before the run
+        "t_after": t[after], # first known value after the run
+        "duration_s": t[last] - t[first],
+    })
+
+def build_distance_grid(df: pd.DataFrame, laps: pd.DataFrame, standstills: pd.DataFrame, track_length: float, step: float = DISTANCE_GRID_STEP_M,
+                        channels: list = NEEDED_CHANNELS, save: bool = True):
+    """Every lap (pit laps excluded) on a fixed distance grid, one row per lap and grid point."""
+    valid_laps = laps[~laps["has_pit"]] # exclue pit lap
+    stops = standstills[standstills["type"] == "stop"] # stops that are not a pit, such as blue flags
+    grid = np.arange(0, track_length, step) # grid that is DISTANCE_GRID_STEP_M apart 
+
+    lap_tables = []
+    for lap in valid_laps.itertuples():
+        # 1. exclude the rows that were part of a stop
+        lap_rows = df[df["lap"] == lap.lap]
+        t = lap_rows["t_s"].to_numpy()
+        in_stop = np.zeros(len(lap_rows), dtype=bool)
+        for start, end in zip(stops["start_s"], stops["end_s"]):
+            in_stop |= (t >= start) & (t <= end)
+        rows = lap_rows[~in_stop]
+
+        # 2. interpolate the time (t_s) on the grid
+        known_s = rows[rows[S_COL].notna()]
+        t_grid = np.interp(grid, known_s[S_COL], known_s["t_s"])
+
+        # 3. time since lap start
+        t_lap = t_grid - lap.t_start
+
+        table = {"lap": lap.lap, "stint": lap.stint, "s": grid,
+                 "t_s": t_grid, "t_lap": t_lap}
+
+        # NaN runs in s, s is unknown there so every channel is unknown
+        s_runs = nan_runs(rows, S_COL)
+
+        # 4. interpolate each channel onto the grid, then put the NaN back
+        for channel in channels:
+            known = rows[rows[S_COL].notna() & rows[channel].notna()]
+            if len(known) < 2:
+                table[channel] = np.full(len(grid), np.nan)
+                continue
+
+            values = np.interp(grid, known[S_COL], known[channel])
+
+            runs = pd.concat([nan_runs(rows, channel), s_runs])
+            for before, after in zip(runs["t_before"], runs["t_after"]):
+                values[(t_grid > before) & (t_grid < after)] = np.nan
+
+            table[channel] = values
+
+        lap_tables.append(pd.DataFrame(table))
+
+    # 5. stack all laps and save
+    grid_df = pd.concat(lap_tables, ignore_index=True)
+    if save:
+        grid_df.to_parquet(PROC_DATA / "laps_distance.parquet", index=False)
+    return grid_df
+    
+    
 
 
 
