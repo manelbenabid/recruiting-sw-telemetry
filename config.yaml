@@ -41,4 +41,6 @@ files: [
     "inv_l_id_27_iq_actual",
 ]
 
+# distance grid in meters
+distance_grid_step_m: 0.3
 
