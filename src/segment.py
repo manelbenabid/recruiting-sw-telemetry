@@ -254,25 +254,33 @@ def build_distance_grid(df: pd.DataFrame, laps: pd.DataFrame, standstills: pd.Da
         table = {"lap": lap.lap, "stint": lap.stint, "s": grid,
                  "t_s": t_grid, "t_lap": t_lap}
 
-        # NaN runs in s, s is unknown there so every channel is unknown
-        s_runs = nan_runs(rows, S_COL)
 
-        # 4. interpolate each channel onto the grid, then put the NaN back
         for channel in channels:
-            known = rows[rows[S_COL].notna() & rows[channel].notna()]
-            if len(known) < 2:
-                table[channel] = np.full(len(grid), np.nan)
+            known = rows[rows[S_COL].notna() & rows[channel].notna()] # rows ehere both s and the channel are not nan
+            if len(known) < 2: # no known rows
+                table[channel] = np.full(len(grid), np.nan) # fill it all with nan
                 continue
+            # channel's values at each grid distance, interpolated for unknown ones
+            values = np.interp(grid, known[S_COL], known[channel]) 
 
-            values = np.interp(grid, known[S_COL], known[channel])
-
-            runs = pd.concat([nan_runs(rows, channel), s_runs])
+            # set the grid points of the channel that fall in nan runs to nan
+            runs = nan_runs(rows, channel)
             for before, after in zip(runs["t_before"], runs["t_after"]):
                 values[(t_grid > before) & (t_grid < after)] = np.nan
 
+            # add the cleaned column to the table
             table[channel] = values
 
-        lap_tables.append(pd.DataFrame(table))
+        lap_df = pd.DataFrame(table)
+
+        # now find the nan runs of s
+        s_runs = nan_runs(rows, S_COL)
+        # set the grid points that fall inside the nan runs to nan
+        for before, after in zip(s_runs["t_before"], s_runs["t_after"]):
+            lap_df.loc[(t_grid > before) & (t_grid < after), channels] = np.nan
+
+
+        lap_tables.append(lap_df)
 
     # 5. stack all laps and save
     grid_df = pd.concat(lap_tables, ignore_index=True)
