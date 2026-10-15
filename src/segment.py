@@ -1,5 +1,5 @@
 
-from src.config import PIT_MIN_S, PROC_DATA, MOTION_THRESHOLD_RAD_S, STANDSTILL_MIN_S, DISTANCE_GRID_STEP_M
+from src.config import PIT_MIN_S, PROC_DATA, MOTION_THRESHOLD_RAD_S, STANDSTILL_MIN_S, DISTANCE_GRID_STEP_M, CURV_SMOOTH_WINDOW_M, K_STRAIGHT, MIN_STRAIGHT_M, K_CORNER, K_LINK, MAX_LINK_M
 import pandas as pd
 from src.preprocess import load_processed
 import numpy as np
@@ -310,6 +310,64 @@ def runs_of(mask: np.ndarray):
         run_id[run_id == run_id[-1]] = 0
     return run_id
 
+# trun the work in notebook 7 to a function
+def find_corners(cl: pd.DataFrame, window: int = CURV_SMOOTH_WINDOW_M,
+                 k_straight: float = K_STRAIGHT, min_straight_m: float = MIN_STRAIGHT_M,
+                 k_corner: float = K_CORNER, k_link: float = K_LINK, max_link_m: float = MAX_LINK_M):
+
+    
+    """
+    
+    Smoothed curvature
+    straights and apexes (grouped into corners) on the centerline
+    
+    """
+
+    cl = cl.copy() # centerline
+    cl["curvature_smooth"] = smooth_circular(cl["curvature"].to_numpy(), window) # smooth the curvature
+    curv = cl["curvature_smooth"].abs().to_numpy()
+    n = len(curv)
+
+    # straights: low curvature for at least min_straight_m 
+    low = curv < k_straight
+    low_runs = runs_of(low)
+    cl["is_straight"] = low & (np.bincount(low_runs)[low_runs] >= min_straight_m)
+
+    # apexes: one per run of high curvature, at its sharpest point
+    high = curv > k_corner
+    cl["high_run"] = runs_of(high)
+    apex_idx = cl[high].groupby("high_run")["curvature_smooth"].apply(lambda c: c.abs().idxmax())
+    apexes = cl.loc[apex_idx].sort_values("s").reset_index()      # "index" = centerline position
+    apexes = apexes.rename(columns={"index": "pos"})
+    apexes["direction"] = np.where(apexes["curvature_smooth"] > 0, "L", "R")
+
+    # group apexes into corners: same direction, close, and the track keeps turning between them
+    def same_corner(a, b):
+        if a["direction"] != b["direction"]:
+            return False
+        i, j = int(a["pos"]), int(b["pos"]) # position of each apex in m on the track
+        # if j and i are in the same lap (pos f j is >= pos of i) then
+        # if j belongs to the next lap then take cuv i:805 and  then curv 0:j
+        between = curv[i:j + 1] if j >= i else np.concatenate([curv[i:], curv[:j + 1]]) 
+        # return true if teh distance <= 35 m (the %n handles the crossing at start/finish)
+        # and if the lowest curvature between them stays at least k_link so the car doesnt staighten
+        # else, they are separate corners
+        return (j - i) % n <= max_link_m and between.min() >= k_link
+
+    corner_id = [0]
+    for k in range(1, len(apexes)):
+        same = same_corner(apexes.iloc[k - 1], apexes.iloc[k]) # this apex and the one before it
+        corner_id.append(corner_id[-1] if same else corner_id[-1] + 1) # assign the corner number
+    corner_id = np.array(corner_id)
+    if len(apexes) > 1 and same_corner(apexes.iloc[-1], apexes.iloc[0]):   # last and first apex in the same corner
+        corner_id[corner_id == corner_id[-1]] = corner_id[0] # assign it the corner of the new lap
+    apexes["corner"] = pd.factorize(corner_id)[0] + 1 # reumbering corners
+
+    # highest curv apex in a corner and make it the main apex of the corner
+    main_idx = apexes.groupby("corner")["curvature_smooth"].apply(lambda c: c.abs().idxmax())
+    apexes["is_main"] = apexes.index.isin(main_idx)
+
+    return cl.drop(columns="high_run"), apexes[["corner", "pos", "s", "x", "y", "curvature_smooth", "direction", "is_main"]]
 
 
 
