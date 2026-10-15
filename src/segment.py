@@ -289,6 +289,27 @@ def build_distance_grid(df: pd.DataFrame, laps: pd.DataFrame, standstills: pd.Da
     return grid_df
     
     
+def smooth_circular(values: np.ndarray, window: int):
+    """
+    Rolling mean over 'window' points, 
+    wrapping around the end of the loop
+    
+    """
+    half = window // 2
+    padded = np.concatenate([values[-half:], values, values[:half]])
+    return np.convolve(padded, np.ones(window) / window, mode="valid")
+
+def runs_of(mask: np.ndarray):
+    """
+    Number each run of consecutive equal values first and 
+    last run joined (track is a loop)
+    
+    """
+    run_id = np.concatenate([[0], np.cumsum(mask[1:] != mask[:-1])])
+    if mask[0] == mask[-1] and run_id[-1] != 0:
+        run_id[run_id == run_id[-1]] = 0
+    return run_id
+
 
 
 
