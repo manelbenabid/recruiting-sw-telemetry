@@ -44,3 +44,13 @@ CUTOFFS = config["cutoffs"]
 OFFSET_CHANNELS = config["offset_channels"]
 FILES = config["files"]
 DISTANCE_GRID_STEP_M = config["distance_grid_step_m"]
+
+# segmentation
+
+K_STRAIGHT = config["k_straight"]
+MIN_STRAIGHT_M =  config["min_straight_m"]   
+K_CORNER = config["k_corner"]
+CURV_SMOOTH_WINDOW_M = config["curvature_smooth_window_m"]
+K_LINK = config["k_link"]
+MAX_LINK_M = config["max_link_m"]
+

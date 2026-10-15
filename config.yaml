@@ -44,3 +44,11 @@ files: [
 # distance grid in meters
 distance_grid_step_m: 0.3
 
+## segmentation variables
+curvature_smooth_window_m: 5
+k_straight: 0.021
+min_straight_m: 20
+k_corner: 0.0385
+k_link: 0.025
+max_link_m: 35
+
