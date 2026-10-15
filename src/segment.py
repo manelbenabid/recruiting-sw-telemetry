@@ -318,7 +318,7 @@ def find_corners(cl: pd.DataFrame, window: int = CURV_SMOOTH_WINDOW_M,
     
     """
     
-    Smoothed curvature
+    smoothed curvature
     straights and apexes (grouped into corners) on the centerline
     
     """
@@ -370,9 +370,103 @@ def find_corners(cl: pd.DataFrame, window: int = CURV_SMOOTH_WINDOW_M,
     return cl.drop(columns="high_run"), apexes[["corner", "pos", "s", "x", "y", "curvature_smooth", "direction", "is_main"]]
 
 
+# now it's time we define the zones in the track
+
+def run_positions(run_id: np.ndarray, r: int):
+    """
+    
+    positions of run r in driving order 
+    (a run that wraps the line starts before 805 and continues from 0)
+    
+    """
+    pos = np.flatnonzero(run_id == r)
+    breaks = np.flatnonzero(np.diff(pos) > 1)
+    if len(breaks): # wraps: put the tail end first
+        pos = np.concatenate([pos[breaks[0] + 1:], pos[:breaks[0] + 1]])
+    return pos
 
 
 
+def build_zones(cl: pd.DataFrame, apexes: pd.DataFrame):
+    """
+    
+    split the track into straight, corner and kink zones
+    
+    returns (centerline with a zone column, zones table)
+    
+    """
+    curv = cl["curvature_smooth"].abs().to_numpy()
+    s = cl["s"].to_numpy()
+    is_straight = cl["is_straight"].to_numpy()
+    zone_of = np.full(len(cl), -1)
+    zones = []
+
+    def add_zone(positions, ztype, corner=None):
+        z = len(zones)
+        zone_of[positions] = z
+        row = {"type": ztype,
+               "corner": corner,
+               "s_start": s[positions[0]],
+               "s_end": s[positions[-1]],
+               "contains_zero": 0 in positions  # contains the start/finish line
+            }
+        if corner is not None:
+            main = apexes[(apexes["corner"] == corner) & apexes["is_main"]].iloc[0] # find main apex
+            row.update(direction=main["direction"], s_apex=main["s"]) # adds corner direction and its apex's position
+        zones.append(row)
+
+    run_id = runs_of(is_straight)
+    for r in np.unique(run_id):
+        pos = run_positions(run_id, r)
+        # straight runs
+        if is_straight[pos[0]]: # every meter in a run has the same value so checking teh first one is enough
+            add_zone(pos, "straight")
+            continue # skip to next 
+
+        # for non straight runs
+        # section: which apexes fall inside it, in driving order
+        rank = {p: k for k, p in enumerate(pos)}
+        inside = apexes[apexes["pos"].isin(rank)].copy()
+        inside["rank"] = inside["pos"].map(rank)
+        inside = inside.sort_values("rank")
+        corners = list(dict.fromkeys(inside["corner"])) # unique, in driving order
+
+        if not corners: # no apex: kink 
+            add_zone(pos, "kink")
+            continue
+
+        # split between consecutive corners at the lowest curvature between them
+        start = 0
+        for c_now, c_next in zip(corners[:-1], corners[1:]):
+            last_now = inside.loc[inside["corner"] == c_now, "rank"].max()
+            first_next = inside.loc[inside["corner"] == c_next, "rank"].min()
+            split = last_now + np.argmin(curv[pos[last_now:first_next + 1]])
+            add_zone(pos[start:split + 1], "corner", c_now)
+            start = split + 1
+        add_zone(pos[start:], "corner", corners[-1])
+
+    # number zones in driving order, starting with the zone that contains s = 0
+    zones = pd.DataFrame(zones)
+    order = zones.assign(key=np.where(zones["contains_zero"], -1, zones["s_start"])).sort_values("key").index
+    renumber = {old: new + 1 for new, old in enumerate(order)}
+    zones = zones.loc[order].reset_index(drop=True)
+    zones.insert(0, "zone", np.arange(1, len(zones) + 1))
+
+    cl = cl.copy()
+    cl["zone"] = [renumber[z] for z in zone_of]
+    return cl, zones.drop(columns="contains_zero")
+
+
+# labeling the zones
+def label_zones(grid_df: pd.DataFrame, cl: pd.DataFrame, zones: pd.DataFrame):
+    """
+    give every grid row the zone, zone type and corner of the centerline metre it falls in
+    
+    """
+    grid_df = grid_df.copy()
+    pos = np.floor(grid_df["s"].to_numpy()).astype(int) % len(cl)
+    grid_df["zone"] = cl["zone"].to_numpy()[pos]
+    return grid_df.merge(zones[["zone", "type", "corner"]], on="zone", how="left")
 
 
 
