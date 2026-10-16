@@ -204,7 +204,8 @@ NEEDED_CHANNELS = [
     "inv_l_id_a8_n_actual_filt__n_act_filt",
     "inv_r_id_a8_n_actual_filt__n_act_filt",
     "inv_l_id_27_iq_actual__iq_act_filt",
-    "inv_r_id_27_iq_actual__iq_act_filt"
+    "inv_r_id_27_iq_actual__iq_act_filt",
+    "steer_angle__angle"
 ]
 
 def nan_runs(df: pd.DataFrame, col: str):
