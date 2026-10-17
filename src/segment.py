@@ -1,5 +1,7 @@
 
-from src.config import PIT_MIN_S, PROC_DATA, MOTION_THRESHOLD_RAD_S, STANDSTILL_MIN_S, DISTANCE_GRID_STEP_M, CURV_SMOOTH_WINDOW_M, K_STRAIGHT, MIN_STRAIGHT_M, K_CORNER, K_LINK, MAX_LINK_M
+from src.config import ( PIT_MIN_S, PROC_DATA, MOTION_THRESHOLD_RAD_S, STANDSTILL_MIN_S, DISTANCE_GRID_STEP_M, CURV_SMOOTH_WINDOW_M, 
+                        K_STRAIGHT, MIN_STRAIGHT_M, K_CORNER, K_LINK, MAX_LINK_M, PHASE_SMOOTH_M, THROTTLE_OFF, THROTTLE_FULL, BRAKE_OFF_BAR, 
+                        STEER_ZERO_DEG, DEADBAND_BRAKE_BAR_PER_M, DEADBAND_THROTTLE_PER_M, DEADBAND_STEER_DEG_PER_M )
 import pandas as pd
 from src.preprocess import load_processed
 import numpy as np
@@ -9,6 +11,41 @@ S_COL = "vehicle_curvilinear_coordinates__s"
 FL_COL = "front_angular_velocity__fl"
 FR_COL = "front_angular_velocity__fr"
 U_COL = "vehicle_speed__u"
+
+THROTTLE_COL = "pedal_throttle__throttle"
+BRAKE_COL = "pedal_brakes_pressure__front"
+STEER_COL = "steer_angle__angle"
+
+SEGMENT_FILES = {
+    "grid": "grid_phases.parquet",
+    "laps": "laps.parquet",
+    "gaps": "gaps.parquet",
+    "zones": "zones.parquet",
+    "apexes": "apexes.parquet",
+    "stints": "stints.parquet",
+    "standstills": "standstills.parquet",
+}
+
+NEEDED_CHANNELS = [
+    "pedal_throttle__throttle",
+    "pedal_brakes_pressure__front",
+    "pedal_brakes_pressure__rear",
+    "vehicle_speed__u",
+    "imu_acceleration__y",
+    "imu_acceleration__x",
+    "vehicle_position__x",
+    "vehicle_position__y",
+    "vehicle_curvilinear_coordinates__n",
+    "front_angular_velocity__fl",
+    "front_angular_velocity__fr",
+    "hv_power__power",
+    "inv_l_id_a8_n_actual_filt__n_act_filt",
+    "inv_r_id_a8_n_actual_filt__n_act_filt",
+    "inv_l_id_27_iq_actual__iq_act_filt",
+    "inv_r_id_27_iq_actual__iq_act_filt",
+    "steer_angle__angle"
+]
+
 
 def find_segment_standstills(df: pd.DataFrame, threshold=MOTION_THRESHOLD_RAD_S, min_s=STANDSTILL_MIN_S):
     cleaned = df[(~df["front_angular_velocity__fl"].isna()) & (~df["front_angular_velocity__fr"].isna())]
@@ -187,26 +224,6 @@ def segment_laps(df: pd.DataFrame, standstills: pd.DataFrame, track_length: floa
 
 
 # distance grid
-
-NEEDED_CHANNELS = [
-    "pedal_throttle__throttle",
-    "pedal_brakes_pressure__front",
-    "pedal_brakes_pressure__rear",
-    "vehicle_speed__u",
-    "imu_acceleration__y",
-    "imu_acceleration__x",
-    "vehicle_position__x",
-    "vehicle_position__y",
-    "vehicle_curvilinear_coordinates__n",
-    "front_angular_velocity__fl",
-    "front_angular_velocity__fr",
-    "hv_power__power",
-    "inv_l_id_a8_n_actual_filt__n_act_filt",
-    "inv_r_id_a8_n_actual_filt__n_act_filt",
-    "inv_l_id_27_iq_actual__iq_act_filt",
-    "inv_r_id_27_iq_actual__iq_act_filt",
-    "steer_angle__angle"
-]
 
 def nan_runs(df: pd.DataFrame, col: str):
     t = df["t_s"].to_numpy()
@@ -470,9 +487,119 @@ def label_zones(grid_df: pd.DataFrame, cl: pd.DataFrame, zones: pd.DataFrame):
     return grid_df.merge(zones[["zone", "type", "corner"]], on="zone", how="left")
 
 
+# phases
+
+def add_rates(grid_df: pd.DataFrame, smooth_m: float = PHASE_SMOOTH_M, step: float = DISTANCE_GRID_STEP_M):
+    """
+    abs_steer plus the per-metre rates of throttle, brake and |steering|,
+    computed per lap after a centred rolling mean over smooth_m metres
+    """
+    w = max(1, int(round(smooth_m / step)))  # smoothing window in grid points
+    out = []
+    for lap, d in grid_df.groupby("lap"):
+        d = d.sort_values("s").copy()
+        d["abs_steer"] = d[STEER_COL].abs()
+        s = d["s"].to_numpy()
+        for col, key in [(THROTTLE_COL, "thr"), (BRAKE_COL, "brk"), ("abs_steer", "str")]:
+            smooth = d[col].rolling(w, center=True, min_periods=1).mean()
+            d[f"{key}_rate"] = np.gradient(smooth.to_numpy(), s)  # change per metre
+        out.append(d)
+    return pd.concat(out, ignore_index=True)
 
 
+def label_phases(grid_df: pd.DataFrame,
+                 throttle_off: float = THROTTLE_OFF, throttle_full: float = THROTTLE_FULL,
+                 brake_off: float = BRAKE_OFF_BAR, steer_zero: float = STEER_ZERO_DEG,
+                 db_throttle: float = DEADBAND_THROTTLE_PER_M,
+                 db_brake: float = DEADBAND_BRAKE_BAR_PER_M,
+                 db_steer: float = DEADBAND_STEER_DEG_PER_M):
+    """
+    one phase per grid point, first matching rule wins:
+    ?? -> trail braking -> braking -> full throttle -> coasting -> lift -> throttle on
+    points with any NaN input get phase NaN. needs the columns from add_rates
+    """
+    thr, brk, st = grid_df[THROTTLE_COL], grid_df[BRAKE_COL], grid_df["abs_steer"]
 
+    # levels: where the pedal / wheel is
+    brake_on = brk > brake_off
+    thr_on = thr > throttle_off
+    full = thr >= throttle_full
+    straight = st <= steer_zero
+
+    # rates: whether it is moving (changes inside the deadband count as steady)
+    thr_rising = grid_df["thr_rate"] > db_throttle
+    thr_falling = grid_df["thr_rate"] < -db_throttle
+    brk_rising = grid_df["brk_rate"] > db_brake
+    brk_falling = grid_df["brk_rate"] < -db_brake
+    st_rising = grid_df["str_rate"] > db_steer
+
+    any_nan = grid_df[[THROTTLE_COL, BRAKE_COL, "abs_steer",
+                       "thr_rate", "brk_rate", "str_rate"]].isna().any(axis=1)
+
+    conditions = [
+        any_nan,
+        brake_on & brk_rising & thr_on & thr_rising,           # ?? both pedals rising
+        brake_on & (~straight | (brk_falling & st_rising)),    # trail braking
+        brake_on,                                              # braking
+        full,                                                  # full throttle
+        ~thr_on & ~brake_on,                                   # coasting
+        thr_falling & ~brake_on,                               # lift
+    ]
+    choices = ["__nan__", "??", "trail braking", "braking", "full throttle",
+               "coasting", "lift"]
+
+    grid_df = grid_df.copy()
+    phase = np.select(conditions, choices, default="throttle on")
+    grid_df["phase"] = pd.Series(phase, index=grid_df.index).replace("__nan__", np.nan)
+    return grid_df
+
+
+def run_segmentation(save: bool = True):
+    """
+    run the whole segmentation: standstills, stints, laps, distance grid,
+    corners and zones, then rates and phases on the grid, and save the outputs.
+    """
+    df = load_processed()
+    centerline = load_centerline()
+    track_length = centerline.attrs["length"]
+
+    # stints and laps (time domain)
+    standstills = classify_standstills(df)
+    df, stints = define_stints(df, track_length)
+    df, laps, gaps = segment_laps(df, standstills, track_length)
+
+    # distance grid
+    grid_df = build_distance_grid(df, laps, standstills, track_length, save=save)
+
+    # corners and zones
+    cl, apexes = find_corners(centerline)
+    cl, zones = build_zones(cl, apexes)
+    grid_df = label_zones(grid_df, cl, zones)
+
+    # phases
+    grid_df = label_phases(add_rates(grid_df))
+
+    outputs = {"grid": grid_df, "laps": laps, "gaps": gaps, "zones": zones,
+               "apexes": apexes, "stints": stints, "standstills": standstills}
+
+    if save:
+        PROC_DATA.mkdir(parents=True, exist_ok=True)
+        for name, table in outputs.items():
+            table.to_parquet(PROC_DATA / SEGMENT_FILES[name], index=False)
+
+    return outputs
+
+
+def load_segmented():
+    """
+    
+    read the segmentation outputs, running the segmentation if any file is missing
+    
+    """
+    paths = {name: PROC_DATA / file for name, file in SEGMENT_FILES.items()}
+    if not all(p.exists() for p in paths.values()):
+        return run_segmentation()
+    return {name: pd.read_parquet(p) for name, p in paths.items()}
 
 
 
