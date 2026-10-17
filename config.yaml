@@ -52,3 +52,11 @@ k_corner: 0.0385
 k_link: 0.025
 max_link_m: 35
 
+phase_smooth_m: 2.4
+throttle_off: 0.01
+throttle_full: 0.95
+brake_off_bar: 0.5
+steer_zero_deg: 10
+deadband_throttle_per_m: 0.02
+deadband_brake_bar_per_m: 1.0
+deadband_steer_deg_per_m: 2.5
