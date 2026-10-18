@@ -1,8 +1,10 @@
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-from src.config import  (EXCLUDED_LAPS, WARMUP_LAPS, DISTANCE_GRID_STEP_M, 
-                         DELTA_SMOOTH_M, DELTA_COLOR_CLIP_Q)
+from src.config import (DISTANCE_GRID_STEP_M, EXCLUDED_LAPS, WARMUP_LAPS,
+                        DELTA_SMOOTH_M, DELTA_COLOR_CLIP_Q, BRAKE_OFF_BAR,
+                        BRAKE_MIN_RUN_M, CORNER_EDGE_MARGIN_M)
+from src.segment import BRAKE_COL
 
 
 
@@ -133,3 +135,71 @@ def plot_delta_map(d: pd.DataFrame, cl: pd.DataFrame, apexes: pd.DataFrame,
                       xaxis_title="x (m)", yaxis_title="y (m)")
     fig.update_yaxes(scaleanchor="x", scaleratio=1)
     return fig
+
+
+# finding corner windows
+def _first_run_start(on: np.ndarray, n_min: int):
+    """
+    
+    index where the first run of at least n_min consecutive True values starts
+    
+    """
+    run = 0
+    for i, v in enumerate(on):
+        run = run + 1 if v else 0
+        if run == n_min:
+            return i - n_min + 1
+    return None
+
+
+def corner_windows(grid: pd.DataFrame, zones: pd.DataFrame, laps_used: list[int],
+                   length: float, min_run_m: float = BRAKE_MIN_RUN_M):
+    """
+    one window per corner zone: start shifted back to the earliest brake point across laps,
+    searched only inside the straight just before the corner
+     end = corner zone end
+    """
+    z = zones.sort_values("zone").reset_index(drop=True)
+    g = grid[grid["lap"].isin(laps_used)]
+    n_min = max(1, int(np.ceil(min_run_m / DISTANCE_GRID_STEP_M)))   # metres -> grid points
+
+    rows = []
+    for i, cz in z.iterrows():
+        if cz["type"] != "corner":
+            continue
+        start = cz["s_start"]
+        prev = z.iloc[i - 1] # i - 1 = -1 wraps to the last zone
+        ext = 0.0 # how far back the window is extended, m
+        if prev["type"] == "straight":
+            reach = np.mod(start - prev["s_start"], length) # length of that straight
+            back = np.mod(start - g["s"], length) # metres before the corner start
+            region = g.assign(back=back)[(back > 0) & (back <= reach)]
+            for _, lg in region.groupby("lap"):
+                lg = lg.sort_values("back", ascending=False) # driving order
+                on = (lg[BRAKE_COL] > BRAKE_OFF_BAR).to_numpy()
+                b = _first_run_start(on, n_min)
+                if b is not None:
+                    ext = max(ext, float(lg["back"].iloc[b])) # earliest = furthest back
+        rows.append({"corner": int(cz["corner"]), "zone": int(cz["zone"]),
+                     "s_start": float(np.mod(start - ext, length)),
+                     "s_end": float(cz["s_end"]), "brake_ext_m": ext})
+    return pd.DataFrame(rows)
+
+
+# timer per corner
+def _near_nan_run(e: float, runs: list[tuple[float, float]], length: float, margin: float):
+    """
+    
+    True if position e is inside or within margin of any NaN run of s
+    
+    """
+    for a, b in runs:
+        inside = np.mod(e - a, length) <= np.mod(b - a, length)
+        dist = min(np.mod(a - e, length), np.mod(e - b, length))
+        if inside or dist <= margin:
+            return True
+    return False
+
+
+
+
