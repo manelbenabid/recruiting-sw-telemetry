@@ -61,3 +61,9 @@ STEER_ZERO_DEG = config["steer_zero_deg"]
 DEADBAND_BRAKE_BAR_PER_M = config["deadband_brake_bar_per_m"]
 DEADBAND_THROTTLE_PER_M = config["deadband_throttle_per_m"]
 DEADBAND_STEER_DEG_PER_M = config["deadband_steer_deg_per_m"]
+
+
+NEEDED_CHANNELS =  config["needed_channels"]
+SEGMENT_FILES = config["segment_files"]
+EXCLUDED_LAPS = config["excluded_laps"]
+WARMP_UP_LAPS = config["warmup_laps"]

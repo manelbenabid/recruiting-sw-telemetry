@@ -60,3 +60,36 @@ steer_zero_deg: 10
 deadband_throttle_per_m: 0.02
 deadband_brake_bar_per_m: 1.0
 deadband_steer_deg_per_m: 2.5
+
+segment_files : {
+    "grid": "grid_phases.parquet",
+    "laps": "laps.parquet",
+    "gaps": "gaps.parquet",
+    "zones": "zones.parquet",
+    "apexes": "apexes.parquet",
+    "stints": "stints.parquet",
+    "standstills": "standstills.parquet",
+}
+
+needed_channels : [
+    "pedal_throttle__throttle",
+    "pedal_brakes_pressure__front",
+    "pedal_brakes_pressure__rear",
+    "vehicle_speed__u",
+    "imu_acceleration__y",
+    "imu_acceleration__x",
+    "vehicle_position__x",
+    "vehicle_position__y",
+    "vehicle_curvilinear_coordinates__n",
+    "front_angular_velocity__fl",
+    "front_angular_velocity__fr",
+    "hv_power__power",
+    "inv_l_id_a8_n_actual_filt__n_act_filt",
+    "inv_r_id_a8_n_actual_filt__n_act_filt",
+    "inv_l_id_27_iq_actual__iq_act_filt",
+    "inv_r_id_27_iq_actual__iq_act_filt",
+    "steer_angle__angle"
+]
+
+excluded_laps: [2] # lap numbers
+warmup_laps: [1] #lap numers

@@ -1,7 +1,7 @@
 
 from src.config import ( PIT_MIN_S, PROC_DATA, MOTION_THRESHOLD_RAD_S, STANDSTILL_MIN_S, DISTANCE_GRID_STEP_M, CURV_SMOOTH_WINDOW_M, 
                         K_STRAIGHT, MIN_STRAIGHT_M, K_CORNER, K_LINK, MAX_LINK_M, PHASE_SMOOTH_M, THROTTLE_OFF, THROTTLE_FULL, BRAKE_OFF_BAR, 
-                        STEER_ZERO_DEG, DEADBAND_BRAKE_BAR_PER_M, DEADBAND_THROTTLE_PER_M, DEADBAND_STEER_DEG_PER_M )
+                        STEER_ZERO_DEG, DEADBAND_BRAKE_BAR_PER_M, DEADBAND_THROTTLE_PER_M, DEADBAND_STEER_DEG_PER_M, NEEDED_CHANNELS, SEGMENT_FILES )
 import pandas as pd
 from src.preprocess import load_processed
 import numpy as np
@@ -16,35 +16,7 @@ THROTTLE_COL = "pedal_throttle__throttle"
 BRAKE_COL = "pedal_brakes_pressure__front"
 STEER_COL = "steer_angle__angle"
 
-SEGMENT_FILES = {
-    "grid": "grid_phases.parquet",
-    "laps": "laps.parquet",
-    "gaps": "gaps.parquet",
-    "zones": "zones.parquet",
-    "apexes": "apexes.parquet",
-    "stints": "stints.parquet",
-    "standstills": "standstills.parquet",
-}
 
-NEEDED_CHANNELS = [
-    "pedal_throttle__throttle",
-    "pedal_brakes_pressure__front",
-    "pedal_brakes_pressure__rear",
-    "vehicle_speed__u",
-    "imu_acceleration__y",
-    "imu_acceleration__x",
-    "vehicle_position__x",
-    "vehicle_position__y",
-    "vehicle_curvilinear_coordinates__n",
-    "front_angular_velocity__fl",
-    "front_angular_velocity__fr",
-    "hv_power__power",
-    "inv_l_id_a8_n_actual_filt__n_act_filt",
-    "inv_r_id_a8_n_actual_filt__n_act_filt",
-    "inv_l_id_27_iq_actual__iq_act_filt",
-    "inv_r_id_27_iq_actual__iq_act_filt",
-    "steer_angle__angle"
-]
 
 
 def find_segment_standstills(df: pd.DataFrame, threshold=MOTION_THRESHOLD_RAD_S, min_s=STANDSTILL_MIN_S):
