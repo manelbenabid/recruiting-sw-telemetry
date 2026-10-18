@@ -96,8 +96,8 @@ def plot_delta(d: pd.DataFrame, zones: pd.DataFrame, ref: int, lap: int,
     return fig
 
 
-def plot_delta_map(d: pd.DataFrame, grid: pd.DataFrame, apexes: pd.DataFrame,
-                   ref: int, lap: int, clip_q: float = DELTA_COLOR_CLIP_Q) -> go.Figure:
+def plot_delta_map(d: pd.DataFrame, cl: pd.DataFrame, apexes: pd.DataFrame,
+                   ref: int, lap: int, clip_q: float = DELTA_COLOR_CLIP_Q):
     """
     
     track (reference lap's line) coloured by where time is lost/gained
@@ -105,20 +105,18 @@ def plot_delta_map(d: pd.DataFrame, grid: pd.DataFrame, apexes: pd.DataFrame,
     might have small holes where position was NaN
     
     """
-    r = grid[grid["lap"] == ref][["s", "vehicle_position__x", "vehicle_position__y"]].copy()
-    r["s"] = r["s"].round(3)
-    m = r.merge(d, on="s", how="left")
-    # clip the points above clip_q to be red while keeping the ones below as significant instead of washing them out
-    # this is so that spikes does not wash out the rest
-    lim = np.nanquantile(np.abs(m["loss_rate"]), clip_q)
+    length = cl.attrs["length"]
+    x = np.interp(d["s"], cl["s"], cl["x"], period=length)   # centerline position at each grid s
+    y = np.interp(d["s"], cl["s"], cl["y"], period=length)   # period: the loop closes at s = length
+    lim = np.nanquantile(np.abs(d["loss_rate"]), clip_q)
 
     fig = go.Figure()
     fig.add_trace(go.Scatter(
-        x=m["vehicle_position__x"], y=m["vehicle_position__y"], mode="markers",
+        x=x, y=y, mode="markers",
         name=f"lap {lap} vs {ref}: red = losing, blue = gaining",
-        marker=dict(size=5, color=m["loss_rate"], colorscale="RdBu_r",
-                    cmin=-lim, cmax=lim, cmid=0, colorbar=dict(title="ms/m")),
-        customdata=np.c_[m["s"], m["delta"], m["loss_rate"]],
+        marker=dict(size=5, color=d["loss_rate"], colorscale="RdBu_r",
+                    cmin=-lim, cmax=lim, colorbar=dict(title="ms/m")),
+        customdata=np.c_[d["s"], d["delta"], d["loss_rate"]],
         hovertemplate="s %{customdata[0]:.1f} m<br>delta %{customdata[1]:.3f} s"
                       "<br>rate %{customdata[2]:.2f} ms/m<extra></extra>"))
 
@@ -126,9 +124,7 @@ def plot_delta_map(d: pd.DataFrame, grid: pd.DataFrame, apexes: pd.DataFrame,
     fig.add_trace(go.Scatter(x=main["x"], y=main["y"], mode="text", name="corner",
                              text=[f"C{int(c)}" for c in main["corner"]],
                              textfont=dict(size=13)))
-    start = m.iloc[0]
-    fig.add_trace(go.Scatter(x=[start["vehicle_position__x"]], y=[start["vehicle_position__y"]],
-                             mode="markers", name="start/finish",
+    fig.add_trace(go.Scatter(x=[x[0]], y=[y[0]], mode="markers", name="start/finish",
                              marker=dict(symbol="x", size=14, color="black")))
 
     fig.update_layout(title=f"Where time goes: lap {lap} vs reference lap {ref}",
