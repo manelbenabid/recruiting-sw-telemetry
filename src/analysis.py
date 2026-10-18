@@ -13,4 +13,11 @@ def comparable_laps(laps):
     ok["is_warmup"] = ok["lap"].isin(WARMUP_LAPS)
     return ok
 
+def reference_lap(laps):
+    """
+    
+    takes the fastest comparable lap of the whole session as teh reference lap for the comparison
+    
+    """
+    return int(comparable_laps(laps).iloc[0]["lap"])
 
