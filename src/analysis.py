@@ -149,31 +149,43 @@ def _window_time(lg: pd.DataFrame, s0: float, s1: float):
     return (float(lg["t_lap"].iloc[-1]) - _t_at(lg, s0)) + _t_at(lg, s1)
 
 
-def corner_times(grid: pd.DataFrame, windows: pd.DataFrame, gaps: pd.DataFrame,
-                 laps_used: list[int], ref: int, length: float):
+def corner_times(grid: pd.DataFrame, entries: pd.DataFrame, zones: pd.DataFrame,
+                 gaps: pd.DataFrame, laps_used: list[int], ref: int,
+                 length: float):
     """
-    one row per (lap, corner): time in the window, reference time, loss (+ = slower),
-    valid = neither edge inside a NaN run of s, in this lap AND in the reference lap
+    one row per (lap, corner), lap vs reference
+    window: from the earlier of the two laps' corner entries to the corner zone end
+    entry_diff_m: how much earlier (+) or later (-) the lap enters than the reference, m.
+    valid = neither window edge inside a NaN run of s, in this lap or the reference lap
+    loss (+ = slower) is NaN if not valid
     """
+    s_end = zones[zones["type"] == "corner"].set_index("corner")["s_end"]
     g_ok = gaps.dropna(subset=["s_start", "s_end"])
     runs = {lap: list(zip(gl["s_start"], gl["s_end"])) for lap, gl in g_ok.groupby("lap")}
+    by_lap = {lap: lg.sort_values("s") for lap, lg in grid[grid["lap"].isin(laps_used)].groupby("lap")}
+    ent = entries.set_index(["lap", "corner"])
 
     rows = []
-    for lap, lg in grid[grid["lap"].isin(laps_used)].groupby("lap"):
-        lg = lg.sort_values("s")
-        for _, w in windows.iterrows():
-            edges_ok = not any(_in_nan_run(e, runs.get(lap, []), length)
-                               for e in (w["s_start"], w["s_end"]))
-            rows.append({"lap": int(lap), "corner": int(w["corner"]),
-                         "time": _window_time(lg, w["s_start"], w["s_end"]),
-                         "edges_ok": edges_ok})
+    for lap in laps_used:
+        for c, end in s_end.items():
+            e_lap, e_ref = ent.loc[(lap, c)], ent.loc[(ref, c)]
+            back_lap = np.mod(end - e_lap["s_entry"], length)          # metres from entry to zone end
+            back_ref = np.mod(end - e_ref["s_entry"], length)
+            start = e_lap["s_entry"] if back_lap >= back_ref else e_ref["s_entry"]   # the earlier one
 
-    out = pd.DataFrame(rows)
-    r = out[out["lap"] == ref].set_index("corner")
-    out["ref_time"] = out["corner"].map(r["time"])
-    out["valid"] = out["edges_ok"] & out["corner"].map(r["edges_ok"])
-    out["loss"] = (out["time"] - out["ref_time"]).where(out["valid"])
-    return out
+            valid = not any(_in_nan_run(e, runs.get(l, []), length)
+                            for l in (lap, ref) for e in (start, end))
+            t_lap = _window_time(by_lap[lap], start, end)
+            t_ref = _window_time(by_lap[ref], start, end)
+
+            rows.append({"lap": int(lap), "corner": int(c),
+                         "s_start": float(start), "s_end": float(end),
+                         "entry_lap": float(e_lap["s_entry"]), "entry_ref": float(e_ref["s_entry"]),
+                         "source_lap": e_lap["entry_source"], "source_ref": e_ref["entry_source"],
+                         "entry_diff_m": float(back_lap - back_ref),
+                         "time": t_lap, "ref_time": t_ref, "valid": valid,
+                         "loss": t_lap - t_ref if valid else np.nan})
+    return pd.DataFrame(rows)
 
 
 
