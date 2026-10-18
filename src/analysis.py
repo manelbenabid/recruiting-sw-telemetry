@@ -1,8 +1,8 @@
 import pandas as pd
 import numpy as np
 from src.config import (DISTANCE_GRID_STEP_M, EXCLUDED_LAPS, WARMUP_LAPS,
-                        DELTA_SMOOTH_M, BRAKE_OFF_BAR, PHASE_MIN_RUN_M)
-from src.segment import BRAKE_COL
+                        DELTA_SMOOTH_M, PHASE_MIN_RUN_M, PHASE_MAX_GAP_M)
+
 
 
 
@@ -50,49 +50,71 @@ def time_delta(grid: pd.DataFrame, ref: int, lap: int,
 
 
 # finding corner windows
-def _last_run_start(on: np.ndarray, n_min: int) -> int | None:
-    """Start index of the last run of at least n_min consecutive True values.
-    A run starting at index 0 is ignored (braking carried over from the previous corner)."""
-    last, run = None, 0
-    for i, v in enumerate(on):
-        run = run + 1 if v else 0
-        start = i - n_min + 1
-        if run == n_min and start > 0:
-            last = start
-    return last
+def _runs(mask: np.ndarray, n_min: int, gap_max: int) -> list[tuple[int, int]]:
+    """
+    (start, end) index pairs of runs of True; end is exclusive.
+    runs separated by fewer than gap_max False points are merged into one
+    merged runs shorter than n_min points are dropped.
+    """
+    raw, start = [], None
+    for i, v in enumerate(np.append(mask, False)):
+        if v and start is None:
+            start = i
+        elif not v and start is not None:
+            raw.append([start, i])
+            start = None
+
+    merged = []
+    for r in raw:
+        if merged and r[0] - merged[-1][1] < gap_max:
+            merged[-1][1] = r[1]                   # bridge the short interruption
+        else:
+            merged.append(r)
+    return [(a, b) for a, b in merged if b - a >= n_min]
 
 
-def corner_windows(grid: pd.DataFrame, zones: pd.DataFrame, laps_used: list[int],
-                   length: float, min_run_m: float = BRAKE_MIN_RUN_M):
+
+def corner_entries(grid: pd.DataFrame, apexes: pd.DataFrame, zones: pd.DataFrame,
+                   laps_used: list[int], length: float,
+                   min_run_m: float = PHASE_MIN_RUN_M,
+                   max_gap_m: float = PHASE_MAX_GAP_M):
     """
-    one window per corner zone: start shifted back to the earliest brake point across laps,
-    where a lap's brake point = start of its last brake run in the straight before the corner
-    end = corner zone end.
+    per (lap, corner): where the corner entry starts, searched between the previous corner's
+    last apex and this corner's first apex.
+      1. braking: start of the longest braking run
+      2. else trail braking: start of the longest trail braking run
+      3. else lift: start of the lift run closest to this corner's apex
+      4. else the corner zone start
+    runs already on at the previous apex (they belong to the previous corner) are dropped
+    entry_source says which rule was used.
     """
-    z = zones.sort_values("zone").reset_index(drop=True)
-    g = grid[grid["lap"].isin(laps_used)]
     n_min = max(1, int(np.ceil(min_run_m / DISTANCE_GRID_STEP_M)))   # metres → grid points
+    gap_max = max(1, int(np.ceil(max_gap_m / DISTANCE_GRID_STEP_M)))
+    cz = zones[zones["type"] == "corner"].sort_values("zone").set_index("corner")
+    corners = cz.index.tolist()  # driving order
+    main_apex = apexes[apexes["is_main"]].set_index("corner")["s"]
 
+    rules = [("braking", "longest"), ("trail braking", "longest"), ("lift", "closest")]
     rows = []
-    for i, cz in z.iterrows():
-        if cz["type"] != "corner":
-            continue
-        start = cz["s_start"]
-        prev = z.iloc[i - 1] # i - 1 = -1 wraps to the last zone
-        ext, reach = 0.0, 0.0
-        if prev["type"] == "straight":
-            reach = float(np.mod(start - prev["s_start"], length))   # length of that straight
-            back = np.mod(start - g["s"], length)  # metres before the corner start
-            region = g.assign(back=back)[(back > 0) & (back <= reach)]
-            for _, lg in region.groupby("lap"):
-                lg = lg.sort_values("back", ascending=False) # driving order
-                on = (lg[BRAKE_COL] > BRAKE_OFF_BAR).to_numpy()
-                b = _last_run_start(on, n_min)
-                if b is not None:
-                    ext = max(ext, float(lg["back"].iloc[b])) # earliest = furthest back
-        rows.append({"corner": int(cz["corner"]), "zone": int(cz["zone"]),
-                     "s_start": float(np.mod(start - ext, length)),
-                     "s_end": float(cz["s_end"]), "brake_ext_m": ext, "straight_m": reach})
+    for lap, lg in grid[grid["lap"].isin(laps_used)].groupby("lap"):
+        s = lg["s"].to_numpy()
+        phase = lg["phase"].to_numpy()
+        for i, c in enumerate(corners):
+            a, p = main_apex[c], main_apex[corners[i - 1]]  # i - 1 = -1 wraps to the last corner
+            d = np.mod(s - p, length) # metres after the previous main apex
+            idx = np.where((d > 0) & (d < np.mod(a - p, length)))[0]
+            idx = idx[np.argsort(d[idx])] # driving order
+            ph = phase[idx]
+
+            s_entry, source = float(cz.loc[c, "s_start"]), "zone"     # rule 4 by default
+            for name, pick in rules:
+                runs = [r for r in _runs(ph == name, n_min, gap_max) if r[0] > 0]
+                if runs:
+                    r = max(runs, key=lambda r: r[1] - r[0]) if pick == "longest" else runs[-1]
+                    s_entry, source = float(s[idx[r[0]]]), name
+                    break
+            rows.append({"lap": int(lap), "corner": int(c), "s_entry": s_entry,
+                         "entry_source": source})
     return pd.DataFrame(rows)
 
 
