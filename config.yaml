@@ -96,3 +96,4 @@ warmup_laps: [1] #lap numers
 
 delta_smooth_m: 10        # loss-rate averaging window, metres
 delta_color_clip_q: 0.98  # map colour range clipped at this quantile of |loss rate|
+brake_min_run_m: 1
