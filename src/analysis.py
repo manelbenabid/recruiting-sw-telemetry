@@ -1,9 +1,7 @@
 import pandas as pd
 import numpy as np
-import plotly.graph_objects as go
 from src.config import (DISTANCE_GRID_STEP_M, EXCLUDED_LAPS, WARMUP_LAPS,
-                        DELTA_SMOOTH_M, DELTA_COLOR_CLIP_Q, BRAKE_OFF_BAR,
-                        BRAKE_MIN_RUN_M, CORNER_EDGE_MARGIN_M)
+                        DELTA_SMOOTH_M, BRAKE_OFF_BAR, PHASE_MIN_RUN_M)
 from src.segment import BRAKE_COL
 
 
@@ -51,117 +49,29 @@ def time_delta(grid: pd.DataFrame, ref: int, lap: int,
     return out
 
 
-def _corner_spans(zones: pd.DataFrame, length: float):
-    """
-    
-    returns (corner, start, end) for corner zones
-    
-    split in two if a zone crosses s = 0
-    
-    """
-    spans = []
-    for _, z in zones[zones["type"] == "corner"].iterrows():
-        start, end = z["s_start"], z["s_end"]
-        if end < start:  # wraps around the start/finish line
-            spans += [(z["corner"], start, length), (z["corner"], 0, end)]
-        else:
-            spans.append((z["corner"], start, end))
-    return spans
-
-
-def plot_delta(d: pd.DataFrame, zones: pd.DataFrame, ref: int, lap: int,
-               length: float):
-    """
-    delta vs distance
-    corner zones are shaded so you can see if time loss happens inside corners 
-    or on the straight after them
-    a loss on a straight usually means a slower corner exit
-    
-    """
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=d["s"], y=d["delta"], mode="lines",
-                             name=f"lap {lap} vs lap {ref}", line=dict(width=2)))
-    fig.add_hline(y=0, line=dict(color="grey", dash="dash"))
-
-    for corner, start, end in _corner_spans(zones, length):
-        fig.add_vrect(x0=start, x1=end, fillcolor="lightgrey", opacity=0.3,
-                      line_width=0, layer="below")
-        fig.add_annotation(x=(start + end) / 2, y=1, yref="paper", showarrow=False,
-                           text=f"C{int(corner)}", font=dict(size=11))
-    fig.add_trace(go.Scatter(x=[None], y=[None], mode="markers", name="corner zone",
-                             marker=dict(color="lightgrey", size=12, symbol="square")))
-
-    fig.update_layout(title=f"Time delta: lap {lap} vs reference lap {ref} (+ = slower)",
-                      xaxis_title="distance s (m)", yaxis_title="delta (s)",
-                      width=1400, height=500, showlegend=True,
-                      legend=dict(orientation="h", y=-0.2))
-    return fig
-
-
-def plot_delta_map(d: pd.DataFrame, cl: pd.DataFrame, apexes: pd.DataFrame,
-                   ref: int, lap: int, clip_q: float = DELTA_COLOR_CLIP_Q):
-    """
-    
-    track (reference lap's line) coloured by where time is lost/gained
-    red means losing, blue means gaining, white means equal (it's a gradient)
-    might have small holes where position was NaN
-    
-    """
-    length = cl.attrs["length"]
-    x = np.interp(d["s"], cl["s"], cl["x"], period=length)   # centerline position at each grid s
-    y = np.interp(d["s"], cl["s"], cl["y"], period=length)   # period: the loop closes at s = length
-    lim = np.nanquantile(np.abs(d["loss_rate"]), clip_q)
-
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=x, y=y, mode="markers",
-        name=f"lap {lap} vs {ref}: red = losing, blue = gaining",
-        marker=dict(size=5, color=d["loss_rate"], colorscale="RdBu_r",
-                    cmin=-lim, cmax=lim, colorbar=dict(title="ms/m")),
-        customdata=np.c_[d["s"], d["delta"], d["loss_rate"]],
-        hovertemplate="s %{customdata[0]:.1f} m<br>delta %{customdata[1]:.3f} s"
-                      "<br>rate %{customdata[2]:.2f} ms/m<extra></extra>"))
-
-    main = apexes[apexes["is_main"]]
-    fig.add_trace(go.Scatter(x=main["x"], y=main["y"], mode="text", name="corner",
-                             text=[f"C{int(c)}" for c in main["corner"]],
-                             textfont=dict(size=13)))
-    fig.add_trace(go.Scatter(x=[x[0]], y=[y[0]], mode="markers", name="start/finish",
-                             marker=dict(symbol="x", size=14, color="black")))
-
-    fig.update_layout(title=f"Where time goes: lap {lap} vs reference lap {ref}",
-                      width=1400, height=850, showlegend=True,
-                      legend=dict(orientation="h", y=-0.05),
-                      xaxis_title="x (m)", yaxis_title="y (m)")
-    fig.update_yaxes(scaleanchor="x", scaleratio=1)
-    return fig
-
-
 # finding corner windows
-def _first_run_start(on: np.ndarray, n_min: int):
-    """
-    
-    index where the first run of at least n_min consecutive True values starts
-    
-    """
-    run = 0
+def _last_run_start(on: np.ndarray, n_min: int) -> int | None:
+    """Start index of the last run of at least n_min consecutive True values.
+    A run starting at index 0 is ignored (braking carried over from the previous corner)."""
+    last, run = None, 0
     for i, v in enumerate(on):
         run = run + 1 if v else 0
-        if run == n_min:
-            return i - n_min + 1
-    return None
+        start = i - n_min + 1
+        if run == n_min and start > 0:
+            last = start
+    return last
 
 
 def corner_windows(grid: pd.DataFrame, zones: pd.DataFrame, laps_used: list[int],
                    length: float, min_run_m: float = BRAKE_MIN_RUN_M):
     """
     one window per corner zone: start shifted back to the earliest brake point across laps,
-    searched only inside the straight just before the corner
-     end = corner zone end
+    where a lap's brake point = start of its last brake run in the straight before the corner
+    end = corner zone end.
     """
     z = zones.sort_values("zone").reset_index(drop=True)
     g = grid[grid["lap"].isin(laps_used)]
-    n_min = max(1, int(np.ceil(min_run_m / DISTANCE_GRID_STEP_M)))   # metres -> grid points
+    n_min = max(1, int(np.ceil(min_run_m / DISTANCE_GRID_STEP_M)))   # metres → grid points
 
     rows = []
     for i, cz in z.iterrows():
@@ -169,36 +79,83 @@ def corner_windows(grid: pd.DataFrame, zones: pd.DataFrame, laps_used: list[int]
             continue
         start = cz["s_start"]
         prev = z.iloc[i - 1] # i - 1 = -1 wraps to the last zone
-        ext = 0.0 # how far back the window is extended, m
+        ext, reach = 0.0, 0.0
         if prev["type"] == "straight":
-            reach = np.mod(start - prev["s_start"], length) # length of that straight
-            back = np.mod(start - g["s"], length) # metres before the corner start
+            reach = float(np.mod(start - prev["s_start"], length))   # length of that straight
+            back = np.mod(start - g["s"], length)  # metres before the corner start
             region = g.assign(back=back)[(back > 0) & (back <= reach)]
             for _, lg in region.groupby("lap"):
                 lg = lg.sort_values("back", ascending=False) # driving order
                 on = (lg[BRAKE_COL] > BRAKE_OFF_BAR).to_numpy()
-                b = _first_run_start(on, n_min)
+                b = _last_run_start(on, n_min)
                 if b is not None:
                     ext = max(ext, float(lg["back"].iloc[b])) # earliest = furthest back
         rows.append({"corner": int(cz["corner"]), "zone": int(cz["zone"]),
                      "s_start": float(np.mod(start - ext, length)),
-                     "s_end": float(cz["s_end"]), "brake_ext_m": ext})
+                     "s_end": float(cz["s_end"]), "brake_ext_m": ext, "straight_m": reach})
     return pd.DataFrame(rows)
 
 
-# timer per corner
-def _near_nan_run(e: float, runs: list[tuple[float, float]], length: float, margin: float):
+def _in_nan_run(e: float, runs: list[tuple[float, float]], length: float):
     """
     
-    True if position e is inside or within margin of any NaN run of s
+    True if position e lies inside any NaN run of s
     
     """
-    for a, b in runs:
-        inside = np.mod(e - a, length) <= np.mod(b - a, length)
-        dist = min(np.mod(a - e, length), np.mod(e - b, length))
-        if inside or dist <= margin:
-            return True
-    return False
+    return any(np.mod(e - a, length) <= np.mod(b - a, length) for a, b in runs)
+
+
+def _t_at(lg: pd.DataFrame, s: float):
+    """
+    t_lap at distance s
+    lg = one lap, sorted by s
+    
+    """
+    return float(np.interp(s, lg["s"], lg["t_lap"]))
+
+
+
+def _window_time(lg: pd.DataFrame, s0: float, s1: float):
+    """
+    
+    time spent between s0 and s1
+    if the window crosses the line then the two parts are added
+    
+    """
+    if s1 >= s0:
+        return _t_at(lg, s1) - _t_at(lg, s0)
+    return (float(lg["t_lap"].iloc[-1]) - _t_at(lg, s0)) + _t_at(lg, s1)
+
+
+def corner_times(grid: pd.DataFrame, windows: pd.DataFrame, gaps: pd.DataFrame,
+                 laps_used: list[int], ref: int, length: float):
+    """
+    one row per (lap, corner): time in the window, reference time, loss (+ = slower),
+    valid = neither edge inside a NaN run of s, in this lap AND in the reference lap
+    """
+    g_ok = gaps.dropna(subset=["s_start", "s_end"])
+    runs = {lap: list(zip(gl["s_start"], gl["s_end"])) for lap, gl in g_ok.groupby("lap")}
+
+    rows = []
+    for lap, lg in grid[grid["lap"].isin(laps_used)].groupby("lap"):
+        lg = lg.sort_values("s")
+        for _, w in windows.iterrows():
+            edges_ok = not any(_in_nan_run(e, runs.get(lap, []), length)
+                               for e in (w["s_start"], w["s_end"]))
+            rows.append({"lap": int(lap), "corner": int(w["corner"]),
+                         "time": _window_time(lg, w["s_start"], w["s_end"]),
+                         "edges_ok": edges_ok})
+
+    out = pd.DataFrame(rows)
+    r = out[out["lap"] == ref].set_index("corner")
+    out["ref_time"] = out["corner"].map(r["time"])
+    out["valid"] = out["edges_ok"] & out["corner"].map(r["edges_ok"])
+    out["loss"] = (out["time"] - out["ref_time"]).where(out["valid"])
+    return out
+
+
+
+
 
 
 
