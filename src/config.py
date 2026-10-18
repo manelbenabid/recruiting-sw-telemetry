@@ -67,3 +67,6 @@ NEEDED_CHANNELS =  config["needed_channels"]
 SEGMENT_FILES = config["segment_files"]
 EXCLUDED_LAPS = config["excluded_laps"]
 WARMUP_LAPS = config["warmup_laps"]
+
+DELTA_SMOOTH_M = config["delta_smooth_m"]
+DELTA_COLOR_CLIP_Q = config["delta_color_clip_q"]

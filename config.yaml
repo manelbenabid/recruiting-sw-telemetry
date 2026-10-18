@@ -93,3 +93,6 @@ needed_channels : [
 
 excluded_laps: [2] # lap numbers
 warmup_laps: [1] #lap numers
+
+delta_smooth_m: 10        # loss-rate averaging window, metres
+delta_color_clip_q: 0.98  # map colour range clipped at this quantile of |loss rate|
