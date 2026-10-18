@@ -71,4 +71,4 @@ WARMUP_LAPS = config["warmup_laps"]
 DELTA_SMOOTH_M = config["delta_smooth_m"]
 DELTA_COLOR_CLIP_Q = config["delta_color_clip_q"]
 
-BRAKE_MIN_RUN_M = config["brake_min_run_m"]
+PHASE_MIN_RUN_M = config["phase_min_run_m"]
