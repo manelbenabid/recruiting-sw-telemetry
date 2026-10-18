@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 import plotly.graph_objects as go
 from src.config import  (EXCLUDED_LAPS, WARMUP_LAPS, DISTANCE_GRID_STEP_M, 
                          DELTA_SMOOTH_M, DELTA_COLOR_CLIP_Q)
@@ -95,3 +96,44 @@ def plot_delta(d: pd.DataFrame, zones: pd.DataFrame, ref: int, lap: int,
     return fig
 
 
+def plot_delta_map(d: pd.DataFrame, grid: pd.DataFrame, apexes: pd.DataFrame,
+                   ref: int, lap: int, clip_q: float = DELTA_COLOR_CLIP_Q) -> go.Figure:
+    """
+    
+    track (reference lap's line) coloured by where time is lost/gained
+    red means losing, blue means gaining, white means equal (it's a gradient)
+    might have small holes where position was NaN
+    
+    """
+    r = grid[grid["lap"] == ref][["s", "vehicle_position__x", "vehicle_position__y"]].copy()
+    r["s"] = r["s"].round(3)
+    m = r.merge(d, on="s", how="left")
+    # clip the points above clip_q to be red while keeping the ones below as significant instead of washing them out
+    # this is so that spikes does not wash out the rest
+    lim = np.nanquantile(np.abs(m["loss_rate"]), clip_q)
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=m["vehicle_position__x"], y=m["vehicle_position__y"], mode="markers",
+        name=f"lap {lap} vs {ref}: red = losing, blue = gaining",
+        marker=dict(size=5, color=m["loss_rate"], colorscale="RdBu_r",
+                    cmin=-lim, cmax=lim, cmid=0, colorbar=dict(title="ms/m")),
+        customdata=np.c_[m["s"], m["delta"], m["loss_rate"]],
+        hovertemplate="s %{customdata[0]:.1f} m<br>delta %{customdata[1]:.3f} s"
+                      "<br>rate %{customdata[2]:.2f} ms/m<extra></extra>"))
+
+    main = apexes[apexes["is_main"]]
+    fig.add_trace(go.Scatter(x=main["x"], y=main["y"], mode="text", name="corner",
+                             text=[f"C{int(c)}" for c in main["corner"]],
+                             textfont=dict(size=13)))
+    start = m.iloc[0]
+    fig.add_trace(go.Scatter(x=[start["vehicle_position__x"]], y=[start["vehicle_position__y"]],
+                             mode="markers", name="start/finish",
+                             marker=dict(symbol="x", size=14, color="black")))
+
+    fig.update_layout(title=f"Where time goes: lap {lap} vs reference lap {ref}",
+                      width=1400, height=850, showlegend=True,
+                      legend=dict(orientation="h", y=-0.05),
+                      xaxis_title="x (m)", yaxis_title="y (m)")
+    fig.update_yaxes(scaleanchor="x", scaleratio=1)
+    return fig
