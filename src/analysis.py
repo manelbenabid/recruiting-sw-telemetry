@@ -336,3 +336,54 @@ def metrics_vs_ref(cm: pd.DataFrame, ref: int):
     for col in METRIC_COLS:
         out[f"{col}_diff"] = out[col] - out[f"{col}_ref"]
     return out
+
+
+## corner study
+def group_times(grid: pd.DataFrame, apexes: pd.DataFrame, entries: pd.DataFrame, zones: pd.DataFrame,
+                gaps: pd.DataFrame, laps_used: list[int], groups: dict[str, list[int]],
+                length: float):
+    """
+    one row per (group, lap): time in the group's window.
+    window, same for every lap: earliest entry of the first corner across laps -> zone end of the last corner
+    gap = True if a NaN run of s starts inside the window in that lap.
+    """
+    apex_s = apexes[apexes["is_main"]].set_index("corner")["s"]
+    zc = zones[zones["type"] == "corner"].set_index("corner")
+    e = entries[entries["lap"].isin(laps_used)]
+    g_ok = gaps.dropna(subset=["s_start"])
+    gap_s = {lap: gl["s_start"].tolist() for lap, gl in g_ok.groupby("lap")}
+    stint = grid.groupby("lap")["stint"].first()
+    lap_grids = {lap: lg.sort_values("s") for lap, lg in grid[grid["lap"].isin(laps_used)].groupby("lap")}
+
+    rows = []
+    for name, corners in groups.items():
+        first, last = corners[0], corners[-1]
+        e1 = e[e["corner"] == first]
+        back = np.mod(apex_s[first] - e1["s_entry"], length).to_numpy()   # metres before the apex
+        s0 = float(e1["s_entry"].iloc[int(np.argmax(back))])              # earliest entry
+        s1 = float(zc.loc[last, "s_end"])
+        span = np.mod(s1 - s0, length)
+        for lap, lg in lap_grids.items():
+            gap = any(np.mod(gs - s0, length) <= span for gs in gap_s.get(lap, []))
+            rows.append({"group": name, "lap": int(lap), "stint": int(stint[lap]),
+                         "s_start": s0, "s_end": s1,
+                         "time": _window_time(lg, s0, s1), "gap": gap})
+    return pd.DataFrame(rows)
+
+
+def pick_laps(gt: pd.DataFrame, ref: int):
+    """
+    Per group: the reference lap, the fastest lap, and the slowest lap of each stint.
+    Laps with a gap in the window and warmup laps are left out of the picks
+    """
+    rows = []
+    for name, g in gt.groupby("group", sort=False):
+        ok = g[~g["gap"] & ~g["lap"].isin(WARMUP_LAPS)]
+        ref_time = float(g.loc[g["lap"] == ref, "time"].iloc[0])
+        picks = [("ref", ref), ("fastest", int(ok.loc[ok["time"].idxmin(), "lap"]))]
+        for st, gs in ok.groupby("stint"):
+            picks.append((f"slowest stint {st}", int(gs.loc[gs["time"].idxmax(), "lap"])))
+        for role, lap in picks:
+            t = float(g.loc[g["lap"] == lap, "time"].iloc[0])
+            rows.append({"group": name, "role": role, "lap": lap, "time": t, "delta": t - ref_time})
+    return pd.DataFrame(rows)
