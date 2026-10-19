@@ -1,8 +1,14 @@
 import pandas as pd
 import numpy as np
 from src.config import (DISTANCE_GRID_STEP_M, EXCLUDED_LAPS, WARMUP_LAPS,
-                        DELTA_SMOOTH_M, PHASE_MIN_RUN_M, PHASE_MAX_GAP_M)
+                        DELTA_SMOOTH_M, PHASE_MIN_RUN_M, PHASE_MAX_GAP_M,
+                        MOTION_THRESHOLD_RAD_S, DEADBAND_STEER_DEG_PER_M,
+                        THROTTLE_OFF, PHASES)
 
+from src.segment import (BRAKE_COL, THROTTLE_COL, U_COL, FL_COL, FR_COL)
+LAT_COL = "imu_acceleration__y"
+RL_COL = "inv_l_id_a8_n_actual_filt__n_act_filt"
+RR_COL = "inv_r_id_a8_n_actual_filt__n_act_filt"
 
 
 
@@ -188,9 +194,145 @@ def corner_times(grid: pd.DataFrame, entries: pd.DataFrame, zones: pd.DataFrame,
     return pd.DataFrame(rows)
 
 
+## metrics
+
+
+def _from_origin(s: float, origin: float, length: float):
+    """
+    returns the distance of a point from a reference point (origin), signed, - means before the ref, + means after the ref
+    it accounts for the loop
+    
+    """
+    return float(np.mod(s - origin + length / 2, length) - length / 2)
+
+
+## this function needs function for other tracks bc it would fail if the corner spands two laps
+def _stretch(lap_grid: pd.DataFrame, s0: float, s1: float, length: float):
+    """
+    lap_grid = rows of the grid of one lap
+    returns the grid points of one lap from s0 to s1 in driving order (crosses s = 0 if needed)
+    adds d = metres of grid point from s0
+    
+    """
+    d = np.mod(lap_grid["s"].to_numpy() - s0, length)
+    m = d <= np.mod(s1 - s0, length)
+    return lap_grid[m].assign(d=d[m]).sort_values("d")
 
 
 
+def corner_metrics(grid: pd.DataFrame, entries: pd.DataFrame, apexes: pd.DataFrame,
+                   zones: pd.DataFrame, laps_used: list[int], length: float,
+                   min_run_m: float = PHASE_MIN_RUN_M,
+                   max_gap_m: float = PHASE_MAX_GAP_M):
+    """
+    one row per (lap, corner), measured from that lap's own entry to the corner zone end
+    positions are signed metres from the corner's main apex (negative = before the apex)
+
+    """
+    n_min = max(1, int(np.ceil(min_run_m / DISTANCE_GRID_STEP_M)))
+    gap_max = max(1, int(np.ceil(max_gap_m / DISTANCE_GRID_STEP_M)))
+    cz = zones[zones["type"] == "corner"].sort_values("zone").set_index("corner")
+    corners = cz.index.tolist()
+    main_apex = apexes[apexes["is_main"]].set_index("corner")["s"]
+    ent = entries.set_index(["lap", "corner"])
+
+    rows = []
+    for lap, lg in grid[grid["lap"].isin(laps_used)].groupby("lap"):
+        for i, c in enumerate(corners):
+            a, end = main_apex[c], cz.loc[c, "s_end"]
+            prev_a = main_apex[corners[i - 1]]
+            e = ent.loc[(lap, c)]
+            w = _stretch(lg, e["s_entry"], end, length)
+            u = w[U_COL].to_numpy()
+            row = {"lap": int(lap), "corner": int(c), "entry_source": e["entry_source"],
+                   "entry_from_apex": _from_origin(e["s_entry"], a, length)}
+
+            # braking, speed, throttle pickup, exit
+            to_apex = w[w["d"] <= np.mod(a - e["s_entry"], length)]
+            after_apex = w[w["d"] >= np.mod(a - e["s_entry"], length)]
+            row["peak_brake_bar"] = float(to_apex[BRAKE_COL].max()) if len(to_apex) else np.nan
+
+            if np.isfinite(u).any():
+                k = int(np.nanargmin(u))
+                row["min_speed"] = float(u[k])
+                row["min_speed_from_apex"] = _from_origin(w["s"].iloc[k], a, length)
+            else:
+                row["min_speed"] = row["min_speed_from_apex"] = np.nan
+
+            on = (w[THROTTLE_COL] > THROTTLE_OFF).to_numpy()
+            runs = _runs(on, n_min, gap_max)
+            if runs and runs[-1][1] == len(on) and runs[-1][0] > 0:
+                row["pickup_from_apex"] = _from_origin(w["s"].iloc[runs[-1][0]], a, length)
+            else:
+                row["pickup_from_apex"] = np.nan
+            row["exit_speed"] = float(u[-1]) if len(u) else np.nan
+
+            # time and distance per phase, entry -> zone end 
+            t = w["t_lap"].to_numpy()
+            dt = np.diff(t, append=t[-1]) if len(t) else np.array([])
+            dt[dt < 0] = 0.0                                       # the jump in t_lap where a window crosses s = 0
+            total_t, total_d = dt.sum(), len(w) * DISTANCE_GRID_STEP_M
+            row["corner_time"], row["corner_dist"] = float(total_t), float(total_d)
+            ph = w["phase"].to_numpy()
+            for p in PHASES:
+                m = ph == p
+                key = p.replace(" ", "_")
+                row[f"{key}_time"] = float(dt[m].sum())
+                row[f"{key}_dist"] = float(m.sum() * DISTANCE_GRID_STEP_M)
+                row[f"{key}_pct_time"] = 100 * row[f"{key}_time"] / total_t if total_t else np.nan
+                row[f"{key}_pct_dist"] = 100 * row[f"{key}_dist"] / total_d if total_d else np.nan
+            row["brake_total_time"] = row["braking_time"] + row["trail_braking_time"]
+            row["brake_total_pct_time"] = 100 * row["brake_total_time"] / total_t if total_t else np.nan
+
+            # coasting before the brake point, added to coasting 
+            if e["entry_source"] in ("braking", "trail braking"):
+                before = _stretch(lg, prev_a, e["s_entry"], length)
+                thr_on = (before[THROTTLE_COL] > THROTTLE_OFF).to_numpy()
+                if thr_on.any():
+                    gap = before.iloc[int(np.where(thr_on)[0][-1]):]   # throttle release → brake point
+                    gt = gap["t_lap"].to_numpy()
+                    gdt = np.diff(gt, append=gt[-1])
+                    gdt[gdt < 0] = 0.0
+                    gm = (gap["phase"] == "coasting").to_numpy()
+                    gap_t, gap_d = float(gdt.sum()), len(gap) * DISTANCE_GRID_STEP_M
+                    row["coasting_time"] += float(gdt[gm].sum())
+                    row["coasting_dist"] += float(gm.sum() * DISTANCE_GRID_STEP_M)
+                    row["coasting_pct_time"] = 100 * row["coasting_time"] / (total_t + gap_t) if total_t + gap_t else np.nan
+                    row["coasting_pct_dist"] = 100 * row["coasting_dist"] / (total_d + gap_d) if total_d + gap_d else np.nan
+
+            # grip, exit throttle, steering corrections, exit slip
+            row["peak_lat_g"] = float(w[LAT_COL].abs().max())
+            row["max_exit_throttle"] = float(after_apex[THROTTLE_COL].max()) if len(after_apex) else np.nan
+
+            sr = w["str_rate"].to_numpy()
+            sign = np.sign(np.where(np.abs(sr) > DEADBAND_STEER_DEG_PER_M, sr, 0))
+            sign = sign[sign != 0]
+            row["steer_corrections"] = int((np.diff(sign) != 0).sum()) if len(sign) else 0
+
+            front = after_apex[[FL_COL, FR_COL]].mean(axis=1)
+            rear = after_apex[[RL_COL, RR_COL]].mean(axis=1)
+            ok = front > MOTION_THRESHOLD_RAD_S
+            row["exit_slip_pct"] = float(100 * (rear[ok].mean() / front[ok].mean() - 1)) if ok.any() else np.nan
+
+            rows.append(row)
+    return pd.DataFrame(rows)
 
 
+METRIC_COLS = (["entry_from_apex", "peak_brake_bar", "min_speed", "min_speed_from_apex",
+                "pickup_from_apex", "exit_speed", "corner_time", "corner_dist",
+                "brake_total_time", "brake_total_pct_time", "peak_lat_g", "max_exit_throttle",
+                "steer_corrections", "exit_slip_pct"]
+               + [f"{p.replace(' ', '_')}_{k}" for p in PHASES
+                  for k in ("time", "dist", "pct_time", "pct_dist")])
 
+
+def metrics_vs_ref(cm: pd.DataFrame, ref: int):
+    """
+    Adds <metric>_ref and <metric>_diff (lap − reference) for every metric
+    
+    """
+    r = cm[cm["lap"] == ref].set_index("corner")[METRIC_COLS]
+    out = cm.join(r, on="corner", rsuffix="_ref")
+    for col in METRIC_COLS:
+        out[f"{col}_diff"] = out[col] - out[f"{col}_ref"]
+    return out
