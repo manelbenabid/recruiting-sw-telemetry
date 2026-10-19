@@ -98,3 +98,4 @@ delta_smooth_m: 10        # loss-rate averaging window, metres
 delta_color_clip_q: 0.98  # map colour range clipped at this quantile of |loss rate|
 phase_min_run_m: 1
 phase_max_gap_m: 1 
+phases: ["braking", "trail braking", "coasting", "lift", "throttle on"] # for our metrics

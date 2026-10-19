@@ -73,3 +73,4 @@ DELTA_COLOR_CLIP_Q = config["delta_color_clip_q"]
 
 PHASE_MIN_RUN_M = config["phase_min_run_m"]
 PHASE_MAX_GAP_M= config["phase_max_gap_m"]
+PHASES = config["phases"]
