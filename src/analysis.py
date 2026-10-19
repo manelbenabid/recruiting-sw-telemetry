@@ -219,13 +219,33 @@ def _stretch(lap_grid: pd.DataFrame, s0: float, s1: float, length: float):
     return lap_grid[m].assign(d=d[m]).sort_values("d")
 
 
+def corner_exits(apexes: pd.DataFrame, entries: pd.DataFrame, zones: pd.DataFrame,
+                 laps_used: list[int], length: float) :
+    """
+    Exit point per corner, same for every lap: the corner's zone end,
+    or the earliest entry of the next corner across laps if that comes first.
+    Returns s_exit indexed by corner.
+    """
+    order = apexes[apexes["is_main"]].sort_values("s")["corner"].tolist()   # corners in driving order
+    zc = zones[zones["type"] == "corner"].set_index("corner")
+    e = entries[entries["lap"].isin(laps_used)]
+
+    out = {}
+    for i, c in enumerate(order):
+        s_end = float(zc.loc[c, "s_end"])
+        nxt = order[(i + 1) % len(order)]
+        en = e[e["corner"] == nxt]["s_entry"]
+        before = (np.mod(en - s_end + length / 2, length) - length / 2).min()   # − = next entry before zone end
+        out[c] = float(np.mod(s_end + before, length)) if before < 0 else s_end
+    return pd.Series(out, name="s_exit")
 
 def corner_metrics(grid: pd.DataFrame, entries: pd.DataFrame, apexes: pd.DataFrame,
                    zones: pd.DataFrame, laps_used: list[int], length: float,
                    min_run_m: float = PHASE_MIN_RUN_M,
                    max_gap_m: float = PHASE_MAX_GAP_M):
     """
-    one row per (lap, corner), measured from that lap's own entry to the corner zone end
+    one row per (lap, corner), measured from that lap's own entry to the corner's exit point
+    (corner_exits: zone end, or the earliest next-corner entry across laps if that comes first)
     positions are signed metres from the corner's main apex (negative = before the apex)
 
     """
@@ -234,12 +254,13 @@ def corner_metrics(grid: pd.DataFrame, entries: pd.DataFrame, apexes: pd.DataFra
     cz = zones[zones["type"] == "corner"].sort_values("zone").set_index("corner")
     corners = cz.index.tolist()
     main_apex = apexes[apexes["is_main"]].set_index("corner")["s"]
+    exits = corner_exits(apexes, entries, zones, laps_used, length)
     ent = entries.set_index(["lap", "corner"])
 
     rows = []
     for lap, lg in grid[grid["lap"].isin(laps_used)].groupby("lap"):
         for i, c in enumerate(corners):
-            a, end = main_apex[c], cz.loc[c, "s_end"]
+            a, end = main_apex[c], exits[c]
             prev_a = main_apex[corners[i - 1]]
             e = ent.loc[(lap, c)]
             w = _stretch(lg, e["s_entry"], end, length)
@@ -267,7 +288,7 @@ def corner_metrics(grid: pd.DataFrame, entries: pd.DataFrame, apexes: pd.DataFra
                 row["pickup_from_apex"] = np.nan
             row["exit_speed"] = float(u[-1]) if len(u) else np.nan
 
-            # time and distance per phase, entry -> zone end 
+            # time and distance per phase, entry -> exit point
             t = w["t_lap"].to_numpy()
             dt = np.diff(t, append=t[-1]) if len(t) else np.array([])
             dt[dt < 0] = 0.0                                       # the jump in t_lap where a window crosses s = 0
@@ -347,10 +368,8 @@ def group_times(grid: pd.DataFrame, apexes: pd.DataFrame, entries: pd.DataFrame,
     window, same for every lap: earliest entry of the first corner across laps -> zone end of the last corner
     gap = True if a NaN run of s starts inside the window in that lap.
     """
-    main = apexes[apexes["is_main"]].sort_values("s").reset_index(drop=True)
-    apex_s = main.set_index("corner")["s"]
-    order = main["corner"].tolist()                                     # corners in driving order
-    zc = zones[zones["type"] == "corner"].set_index("corner")
+    apex_s = apexes[apexes["is_main"]].set_index("corner")["s"]
+    exits = corner_exits(apexes, entries, zones, laps_used, length)
     e = entries[entries["lap"].isin(laps_used)]
     g_ok = gaps.dropna(subset=["s_start"])
     gap_s = {lap: gl["s_start"].tolist() for lap, gl in g_ok.groupby("lap")}
@@ -363,14 +382,7 @@ def group_times(grid: pd.DataFrame, apexes: pd.DataFrame, entries: pd.DataFrame,
         e1 = e[e["corner"] == first]
         back = np.mod(apex_s[first] - e1["s_entry"], length).to_numpy()   # metres before the apex
         s0 = float(e1["s_entry"].iloc[int(np.argmax(back))])              # earliest entry
-
-        s1 = float(zc.loc[last, "s_end"])
-        nxt = order[(order.index(last) + 1) % len(order)]                 # next corner after the group
-        en = e[e["corner"] == nxt]["s_entry"]
-        before = (np.mod(en - s1 + length / 2, length) - length / 2).min()  # − = next entry before zone end
-        if before < 0:
-            s1 = float(np.mod(s1 + before, length))
-
+        s1 = float(exits[last])
         span = np.mod(s1 - s0, length)
         for lap, lg in lap_grids.items():
             gap = any(np.mod(gs - s0, length) <= span for gs in gap_s.get(lap, []))
