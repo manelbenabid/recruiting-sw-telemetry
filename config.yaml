@@ -99,3 +99,12 @@ delta_color_clip_q: 0.98  # map colour range clipped at this quantile of |loss r
 phase_min_run_m: 1
 phase_max_gap_m: 1 
 phases: ["braking", "trail braking", "coasting", "lift", "throttle on"] # for our metrics
+
+## corner study variables
+corner_groups:
+  C1: [1]
+  esses: [2, 3, 4, 5]
+  C20: [20]
+  C24: [24]
+  snail: [25, 26]
+  C27: [27]
