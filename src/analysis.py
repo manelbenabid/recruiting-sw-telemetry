@@ -347,7 +347,9 @@ def group_times(grid: pd.DataFrame, apexes: pd.DataFrame, entries: pd.DataFrame,
     window, same for every lap: earliest entry of the first corner across laps -> zone end of the last corner
     gap = True if a NaN run of s starts inside the window in that lap.
     """
-    apex_s = apexes[apexes["is_main"]].set_index("corner")["s"]
+    main = apexes[apexes["is_main"]].sort_values("s").reset_index(drop=True)
+    apex_s = main.set_index("corner")["s"]
+    order = main["corner"].tolist()                                     # corners in driving order
     zc = zones[zones["type"] == "corner"].set_index("corner")
     e = entries[entries["lap"].isin(laps_used)]
     g_ok = gaps.dropna(subset=["s_start"])
@@ -361,7 +363,14 @@ def group_times(grid: pd.DataFrame, apexes: pd.DataFrame, entries: pd.DataFrame,
         e1 = e[e["corner"] == first]
         back = np.mod(apex_s[first] - e1["s_entry"], length).to_numpy()   # metres before the apex
         s0 = float(e1["s_entry"].iloc[int(np.argmax(back))])              # earliest entry
+
         s1 = float(zc.loc[last, "s_end"])
+        nxt = order[(order.index(last) + 1) % len(order)]                 # next corner after the group
+        en = e[e["corner"] == nxt]["s_entry"]
+        before = (np.mod(en - s1 + length / 2, length) - length / 2).min()  # − = next entry before zone end
+        if before < 0:
+            s1 = float(np.mod(s1 + before, length))
+
         span = np.mod(s1 - s0, length)
         for lap, lg in lap_grids.items():
             gap = any(np.mod(gs - s0, length) <= span for gs in gap_s.get(lap, []))
@@ -369,7 +378,6 @@ def group_times(grid: pd.DataFrame, apexes: pd.DataFrame, entries: pd.DataFrame,
                          "s_start": s0, "s_end": s1,
                          "time": _window_time(lg, s0, s1), "gap": gap})
     return pd.DataFrame(rows)
-
 
 def pick_laps(gt: pd.DataFrame, ref: int):
     """
