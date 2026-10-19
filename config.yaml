@@ -104,7 +104,16 @@ phases: ["braking", "trail braking", "coasting", "lift", "throttle on"] # for ou
 corner_groups:
   C1: [1] # wide
   esses: [2, 3, 4, 5] # esses
-  C20: [20] # 20 degrees
+  C20: [20] # 90 degrees
   C24: [24] # hairpin
   snail: [25, 26] #snail
   C27: [27] # hairpin
+
+## app
+session_label: "Hydra · Varano · 8 Sep 2024 · endurance"
+# (group, lap) left out of the picks: t_lap is broken there (logger-gap pattern), checked with check_group in 09_corner_study
+manual_exclusions:
+  C20: [21]
+  C27: [3, 7, 9, 23]
+issues_file: output/logs/issues.csv
+content_dir: app/content

@@ -77,3 +77,9 @@ PHASES = config["phases"]
 
 ## corner study
 CORNER_GROUPS = config["corner_groups"]
+
+## app
+SESSION_LABEL = config["session_label"]
+MANUAL_EXCLUSIONS = config["manual_exclusions"]
+ISSUES_FILE = ROOT / config["issues_file"]
+CONTENT_DIR = ROOT / config["content_dir"]
