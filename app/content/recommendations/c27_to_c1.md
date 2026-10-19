@@ -1,0 +1,1 @@
+The exit of C27 leads straight to C1, so whatever is lost on the C27 exit is carried all the way to the C1 braking point. Lap 10 exits C27 at 11.9 m/s and reaches 15.2 m/s at the start of the C1 window. Getting on the throttle early and progressively out of C27 is the first step for a good C1.

@@ -1,0 +1,7 @@
+# E-agle Trento Racing Team colours: yellow #FCFF19 on black
+[theme]
+base = "dark"
+primaryColor = "#FCFF19"
+backgroundColor = "#000000"
+secondaryBackgroundColor = "#141414"
+textColor = "#F2F2F2"

@@ -1,0 +1,6 @@
+- **Corner losses don't add up to the lap delta.** Each corner is timed from its entry to the end of the corner zone, so the straights and the exits between the windows are not counted.
+- **Logger-gap pattern.** On some laps the position along the track (s) barely moves during a gap in the data and then catches up. The lap time is still right, but the time inside the corner where it happens is wrong. The NaN run check on s does not catch it, so these (corner group, lap) pairs are left out by hand (manual_exclusions in config.yaml), after comparing the time in the window with the time worked out from the speed.
+- **Not every pick passed the time check.** The fastest lap in the snail (lap 23) fails the time vs speed check and is kept.
+- **Exit slip is very sensitive to the length of the exit window.** For lap 10 in C24 it goes from 42% to 67.7% just by changing the window. It is a rough indicator only (rolling radius, inner and outer wheels).
+- **pickup_from_apex can be NaN.** This happens when the throttle never goes off in the corner, or when it is still off at the exit point.
+- **Start/finish stitching.** A stretch that crosses the start/finish line would join the end of a lap to its own start. This does not happen in this session.
