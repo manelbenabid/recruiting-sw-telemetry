@@ -407,3 +407,48 @@ def pick_laps(gt: pd.DataFrame, ref: int):
             t = float(g.loc[g["lap"] == lap, "time"].iloc[0])
             rows.append({"group": name, "role": role, "lap": lap, "time": t, "delta": t - ref_time})
     return pd.DataFrame(rows)
+
+def apply_exclusions(gt: pd.DataFrame, exclusions: dict[str, list[int]]) -> pd.DataFrame:
+    """
+    marks (group, lap) pairs as gap = True so pick_laps leaves them out.
+    exclusions = {group: [laps]} from config (MANUAL_EXCLUSIONS): laps whose t_lap is broken
+    inside that group's window (logger-gap pattern), found with the time vs speed check.
+    returns a copy, gt is not changed
+    """
+    out = gt.copy()
+    for group, bad in exclusions.items():
+        out.loc[(out["group"] == group) & out["lap"].isin(bad), "gap"] = True
+    return out
+
+
+# metrics shown per group in the corner study, positions are metres from the apex (- = before)
+SHOW = ["entry_from_apex", "peak_brake_bar", "brake_total_time", "coasting_time", "coasting_dist",
+        "min_speed", "min_speed_from_apex", "pickup_from_apex", "max_exit_throttle", "exit_speed",
+        "steer_corrections", "exit_slip_pct", "corner_time"]
+
+
+def group_metrics(name: str, cm: pd.DataFrame, picks: pd.DataFrame, gt: pd.DataFrame,
+                  grid: pd.DataFrame, groups: dict[str, list[int]], main_apex: pd.Series,
+                  length: float) -> tuple[pd.DataFrame, dict[int, float]]:
+    """
+    metrics of the picked laps of one group: metrics as rows, (corner, lap) as columns,
+    plus speed at the window start, group time and group delta vs the reference.
+    also returns where each main apex of the group is, in metres from the window start.
+    """
+    p = picks[picks["group"] == name].drop_duplicates("lap")
+    lap_list = p["lap"].tolist()
+    m = cm[cm["lap"].isin(lap_list) & cm["corner"].isin(groups[name])]
+    out = m.set_index(["corner", "lap"])[SHOW].T
+
+    s0 = float(gt.loc[gt["group"] == name, "s_start"].iloc[0])
+    for lap in lap_list:
+        lg = grid[grid["lap"] == lap].sort_values("s")
+        u0 = float(np.interp(s0, lg["s"], lg[U_COL]))
+        r = p[p["lap"] == lap].iloc[0]
+        for c in groups[name]:
+            out.loc["speed_at_window_start", (c, lap)] = u0
+            out.loc["group_time", (c, lap)] = r["time"]
+            out.loc["group_delta_vs_ref", (c, lap)] = r["delta"]
+
+    apex_pos = {int(c): float(np.mod(main_apex[c] - s0, length)) for c in groups[name]}
+    return out.round(2), apex_pos
