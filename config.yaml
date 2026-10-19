@@ -102,9 +102,9 @@ phases: ["braking", "trail braking", "coasting", "lift", "throttle on"] # for ou
 
 ## corner study variables
 corner_groups:
-  C1: [1]
-  esses: [2, 3, 4, 5]
-  C20: [20]
-  C24: [24]
-  snail: [25, 26]
-  C27: [27]
+  C1: [1] # wide
+  esses: [2, 3, 4, 5] # esses
+  C20: [20] # 20 degrees
+  C24: [24] # hairpin
+  snail: [25, 26] #snail
+  C27: [27] # hairpin
