@@ -6,7 +6,7 @@ import pandas as pd
 from src.preprocess import load_processed
 import numpy as np
 from src.loader import load_centerline
-
+from scipy.ndimage import median_filter
 S_COL = "vehicle_curvilinear_coordinates__s"
 FL_COL = "front_angular_velocity__fl"
 FR_COL = "front_angular_velocity__fr"
@@ -286,7 +286,7 @@ def smooth_circular(values: np.ndarray, window: int):
     
     """
     half = window // 2
-    padded = np.concatenate([values[-half:], values, values[:half]])
+    padded = np.concatenate([values[len(values) - half:], values, values[:half]])
     return np.convolve(padded, np.ones(window) / window, mode="valid")
 
 def runs_of(mask: np.ndarray):
@@ -322,6 +322,8 @@ def find_corners(cl: pd.DataFrame, window: int = CURV_SMOOTH_WINDOW_M,
     low = curv < k_straight
     low_runs = runs_of(low)
     cl["is_straight"] = low & (np.bincount(low_runs)[low_runs] >= min_straight_m)
+    k = 5
+    cl["is_straight"] =  median_filter(cl["is_straight"], size=k, mode="wrap")
 
     # apexes: one per run of high curvature, at its sharpest point
     high = curv > k_corner
@@ -329,6 +331,9 @@ def find_corners(cl: pd.DataFrame, window: int = CURV_SMOOTH_WINDOW_M,
     apex_idx = cl[high].groupby("high_run")["curvature_smooth"].apply(lambda c: c.abs().idxmax())
     apexes = cl.loc[apex_idx].sort_values("s").reset_index()      # "index" = centerline position
     apexes = apexes.rename(columns={"index": "pos"})
+    if apexes.empty:
+        cols = ["corner", "pos", "s", "x", "y", "curvature_smooth", "direction", "is_main"]
+        return cl.drop(columns="high_run"), pd.DataFrame(columns=cols)
     apexes["direction"] = np.where(apexes["curvature_smooth"] > 0, "L", "R")
 
     # group apexes into corners: same direction, close, and the track keeps turning between them
